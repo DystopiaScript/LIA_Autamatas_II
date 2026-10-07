@@ -1,0 +1,34 @@
+$ Ejemplo: Archivo con errores léxicos reales del lexer
+$ Cada bloque intenta disparar un código de error definido en Error.h / Lexer.cpp
+
+$ Error 506: carácter no reconocido por el lenguaje
+int x @ 5;
+
+$ Error 500: flotante espera dígitos después del punto
+float pi = 3.;
+
+$ Error 501: notación científica espera dígito o signo después de E
+float cientifico1 = 1.5E;
+
+$ Error 502: después del signo en notación científica se esperan dígitos
+float cientifico2 = 2E+;
+
+$ Error 503: operador AND incompleto, falta el segundo &
+bool resultado1 = true & false;
+
+$ Error 504: operador OR incompleto, falta el segundo |
+bool resultado2 = false | true;
+
+$ Error 505: constante de carácter vacía
+char c_vacio = '';
+
+$ Error 507: constante de carácter sin comilla de cierre
+char c_sin_cerrar = 'A;
+
+$ Error 508: constante de string sin cerrar
+string s_sin_cerrar = "Hola mundo;
+
+$ Código válido después de los errores
+int valido;
+valido = 100;
+output valido;
