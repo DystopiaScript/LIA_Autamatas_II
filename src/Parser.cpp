@@ -2,6 +2,19 @@
 
 #include <stdexcept>
 
+// ============================================================================
+// INTEGRACION SINTACTICO-SEMANTICA
+//
+// Parser.cpp conserva el driver predictivo original. La integracion no
+// reemplaza la matriz ni la pila sintactica: agrega acciones en dos puntos:
+//
+// 1. Al aplicar una produccion, por ejemplo EXPR5' -> + EXPR5.
+// 2. Al hacer match de un terminal, por ejemplo id, int o ';'.
+//
+// Esta separacion es importante porque algunas acciones dependen de la
+// produccion elegida y otras necesitan el lexema del token actual.
+// ============================================================================
+
 /**
  * @file Parser.cpp
  * @brief Implementación del Analizador Sintáctico Predictivo de LIA
@@ -204,6 +217,8 @@ bool Parser::Analiza() {
     // Cada paso de la traza se registra ANTES de modificar la pila, para que
     // cada renglón muestre: pila actual | token actual | acción que se ejecuta
     // (mismo formato que la "Pila de Ejecución" vista en clase)
+    // Las excepciones de la capa semantica se capturan al nivel del driver.
+    // Asi un error de tipos no se confunde con un error de sintaxis.
     try {
     while (!pila.empty()) {
         int X = pila.top();             // símbolo del tope de la pila
@@ -223,6 +238,9 @@ bool Parser::Analiza() {
                 // al léxico (esto es el "Dame_un_token()" / "Va_token" de clase)
                 registrarPaso(nombreSimbolo(X) + " = '" + lexemaActual() +
                               "'. Match: sacar de la pila y pedir nuevo token");
+                // El terminal se reconoce correctamente. Antes de pedir el
+                // siguiente token se ejecuta cualquier accion semantica que
+                // dependa de este match.
                 try {
                     ejecutarAccionDeMatch(X);
                 } catch (const std::exception& error) {
@@ -272,6 +290,9 @@ bool Parser::Analiza() {
                 // producción, antes de insertar sus símbolos. Esto permite
                 // colocar un operador en POper antes de analizar el operando
                 // que aparece a la derecha en la gramática LL(1).
+                // La tabla predictiva eligio una produccion valida. La
+                // accion se ejecuta antes de insertar el lado derecho para
+                // conservar el orden conceptual del diagrama semantico.
                 try {
                     ejecutarAccionDeProduccion(n);
                 } catch (const std::exception& error) {
@@ -381,16 +402,27 @@ const std::vector<std::string>& Parser::getErroresSemanticos() const {
 // declaraciones/asignaciones.
 // ============================================================================
 
+/**
+ * @brief Ejecuta las acciones semanticas colocadas alrededor de producciones.
+ *
+ * Las producciones epsilon son especialmente importantes: en la gramatica
+ * LL(1) representan el momento en que termina un nivel de expresion. Por eso
+ * las producciones 36, 39, 44, 54 y 59 disparan reducciones de POper.
+ */
 void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
     using namespace Semantica;
 
     switch (numeroProduccion) {
         case 2: // DECLARA -> def id LID : TIPO ;
+            // Se limpia la lista temporal antes de acumular los ids de esta
+            // declaracion. El tipo todavia no se conoce en este punto.
             Declaraciones::iniciarDeclaracion(estadoSemantico);
             declaracionActiva = true;
             break;
 
         case 20: // EST_ASIG -> id = EXPR ;
+            // El token actual es el id destino porque la produccion se
+            // selecciona antes de hacer match con dicho terminal.
             VerificacionSemantica::iniciarAsignacion(
                 estadoSemantico,
                 tokenActual.lexema
@@ -433,12 +465,14 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             break;
 
         case 35: // EXPR' -> || EXPR
+            // OR tiene la precedencia logica mas baja.
             Expresiones::recibirOperador(estadoSemantico, "||");
             break;
         case 38: // EXPR2' -> && EXPR2
             Expresiones::recibirOperador(estadoSemantico, "&&");
             break;
         case 40: // EXPR3 -> ! EXPR4
+            // '!' se guarda antes de analizar el operando que le sigue.
             Expresiones::recibirOperadorUnario(estadoSemantico, "!");
             break;
         case 43: // EXPR4' -> OPREL EXPR5
@@ -464,6 +498,8 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             break;
 
         case 60: // FACT -> id
+            // El identificador se consulta en la tabla de simbolos y se
+            // apilan su representacion de memoria y su tipo.
             Expresiones::apilarIdentificador(
                 estadoSemantico,
                 tokenActual.lexema
@@ -499,11 +535,13 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             );
             break;
         case 66: // FACT -> ( EXPR )
+            // La marca '(' evita reducir operadores de fuera del parentesis.
             Expresiones::abrirParentesis(estadoSemantico);
             ++parentesisDeExpresionAbiertos;
             break;
 
         case 36: // EXPR' -> epsilon
+            // Al terminar EXPR ya no quedan operadores OR pendientes.
             reducirOperadoresConPrecedenciaMinima(1);
             break;
         case 39: // EXPR2' -> epsilon
@@ -524,6 +562,13 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
     }
 }
 
+/**
+ * @brief Ejecuta acciones que necesitan el token que acaba de hacer match.
+ *
+ * A diferencia de ejecutarAccionDeProduccion(), aqui tokenActual contiene
+ * directamente el lexema reconocido por el lexer. Esto permite registrar
+ * nombres de variables, tipos y destinos de entrada/salida.
+ */
 void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
     using namespace Semantica;
 
@@ -535,7 +580,8 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
         );
     }
 
-    // El tipo cierra semanticamente la declaracion de variables.
+    // El tipo cierra semanticamente la declaracion de variables. Todos los
+    // ids acumulados reciben este mismo tipo y una direccion logica distinta.
     if (declaracionActiva &&
         (terminalEsperado == PR_INT ||
          terminalEsperado == PR_FLOAT ||
@@ -551,7 +597,9 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
         Declaraciones::declararVariables(estadoSemantico, tipo);
     }
 
-    // output (id, id, ...) segun la gramatica existente.
+    // La gramatica actual llama EST_READ a la produccion output(id,...).
+    // Semantica::generarEntrada conserva el nombre conceptual de input,
+    // pero aqui se respeta la produccion real del proyecto.
     if (entradaPorIdentificadorActiva &&
         terminalEsperado == IDENTIFICADOR) {
         EntradaSalida::generarEntrada(
@@ -568,6 +616,7 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
     }
 
     // '=' no entra en POper. Solo termina el contexto de una asignacion.
+    // POper debe contener exclusivamente operadores de expresiones.
     if (asignacionActiva && terminalEsperado == PUNTO_COMA) {
         Expresiones::finalizarAsignacion(estadoSemantico);
         asignacionActiva = false;
@@ -582,6 +631,14 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
     }
 }
 
+/**
+ * @brief Implementa las acciones de reduccion de expresiones.
+ *
+ * La pila POper conserva operadores mientras se reconocen operandos. Cuando
+ * la gramatica llega a una produccion epsilon de un nivel, esta funcion saca
+ * los operadores que ya deben evaluarse, consulta el cubo semantico y crea
+ * los cuádruplos correspondientes.
+ */
 void Parser::reducirOperadoresConPrecedenciaMinima(
     int precedenciaMinima
 ) {

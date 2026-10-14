@@ -49,6 +49,9 @@ struct MetadataArreglo {
 struct Simbolo {
     std::string id;
     TipoDato tipo = TipoDato::ERROR_SEMANTICO;
+    // No es un puntero C++ ni una direccion fisica del proceso. Es la
+    // posicion logica que el compilador asigna dentro de la memoria virtual
+    // del programa fuente para poder generar y leer cuadruplos.
     int direccionRAM = -1;
     MetadataArreglo arreglo;
     bool inicializada = false;
@@ -88,6 +91,8 @@ struct EstadoSemantico {
     int CONT = 1;
     std::vector<Cuadruplo> cuadruplos;
 
+    // Contador de direcciones logicas de la RAM virtual del programa.
+    // Comienza en cero para que la primera variable ocupe VRAM[0].
     int siguienteDireccionRAM = 0;
 
     // ---------------------------------------------------------------------

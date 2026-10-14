@@ -4,6 +4,23 @@
 
 namespace Semantica {
 
+// ============================================================================
+// DESCRIPCION GENERAL
+//
+// Este archivo contiene las operaciones que el parser invoca como acciones
+// semanticas. No decide que produccion usar: esa responsabilidad pertenece a
+// Parser y a su matriz predictiva.
+//
+// Aqui se implementan:
+// - tabla de simbolos y tipos;
+// - cubo semantico;
+// - PilaO, PTipos y POper;
+// - temporales AVAIL y contador CONT;
+// - generacion de cuadruplos;
+// - validacion de asignaciones y entrada/salida;
+// - PSaltos y backpatching para control de flujo futuro.
+// ============================================================================
+
 namespace {
 
 // ============================================================================
@@ -74,6 +91,19 @@ std::string tipoToString(TipoDato tipo) {
 
 namespace VerificacionSemantica {
 
+// --------------------------------------------------------------------------
+// MODULO 1: VERIFICACION SEMANTICA
+//
+// Estas funciones responden preguntas como:
+// - ¿el identificador existe?
+// - ¿ya fue declarado?
+// - ¿los dos operandos son compatibles?
+// - ¿el resultado puede asignarse al destino?
+//
+// La verificacion de tipos se hace antes de crear el cuadruplo, para no
+// generar codigo intermedio basado en una operacion invalida.
+// --------------------------------------------------------------------------
+
 void registrarSimbolo(
     EstadoSemantico& estado,
     const std::string& id,
@@ -94,6 +124,10 @@ void registrarSimbolo(
     Simbolo simbolo;
     simbolo.id = id;
     simbolo.tipo = tipo;
+    // En esta etapa no reservamos memoria real del sistema operativo. El
+    // compilador construye su propio mapa de memoria abstracta: 0, 1, 2...
+    // Luego el generador de codigo o la maquina virtual puede transformar
+    // esas posiciones en offsets, celdas o direcciones reales.
     simbolo.direccionRAM = estado.siguienteDireccionRAM++;
     estado.tablaSimbolos.emplace(id, simbolo);
 }
@@ -125,6 +159,8 @@ TipoDato CuboSemantico(
     const std::string& operador,
     TipoDato t2
 ) {
+    // El cubo recibe los dos tipos y el operador. Su resultado es el tipo
+    // que tendra la expresion o ERROR_SEMANTICO si la combinacion no existe.
     if (t1 == TipoDato::ERROR_SEMANTICO ||
         t2 == TipoDato::ERROR_SEMANTICO) {
         return TipoDato::ERROR_SEMANTICO;
@@ -284,6 +320,18 @@ void registrarDeclaracion(
 
 namespace Declaraciones {
 
+// --------------------------------------------------------------------------
+// MODULO 2: DECLARACIONES
+//
+// La gramatica reconoce primero los nombres y despues el tipo:
+//
+//     def x, y : int ;
+//
+// Por eso los identificadores se almacenan temporalmente en
+// identificadoresPendientes hasta que aparece int, float, char, bool o
+// string.
+// --------------------------------------------------------------------------
+
 void iniciarDeclaracion(EstadoSemantico& estado) {
     estado.identificadoresPendientes.clear();
 }
@@ -349,10 +397,25 @@ void declararConstante(
 
 namespace Expresiones {
 
+// --------------------------------------------------------------------------
+// MODULO 3: EXPRESIONES
+//
+// Las acciones de este modulo implementan el esquema clasico:
+//
+//     operando -> PilaO y su tipo -> PTipos
+//     operador -> POper
+//     reduccion -> cubo semantico + temporal + cuadruplo
+//
+// PilaO y PTipos siempre deben permanecer alineadas: el elemento de una pila
+// describe al elemento que ocupa la misma posicion en la otra.
+// --------------------------------------------------------------------------
+
 void apilarIdentificador(
     EstadoSemantico& estado,
     const std::string& id
 ) {
+    // Una variable se representa por su direccion logica; una constante se
+    // representa por su valor literal almacenado en la tabla de simbolos.
     const Simbolo& simbolo =
         VerificacionSemantica::buscarSimbolo(estado, id);
     if (simbolo.esConstante) {
@@ -374,6 +437,8 @@ void apilarConstante(
     const std::string& valor,
     TipoDato tipo
 ) {
+    // Las constantes no necesitan una entrada temporal en la tabla para ser
+    // usadas en una expresion: se apilan directamente con su tipo.
     if (valor.empty() || tipo == TipoDato::ERROR_SEMANTICO) {
         throw std::invalid_argument(
             "[EXPRESIONES] Constante invalida en expresion"
@@ -451,6 +516,9 @@ std::string obtenerResultado(EstadoSemantico& estado) {
 }
 
 void finalizarAsignacion(EstadoSemantico& estado) {
+    // La asignacion se cierra cuando el parser reconoce ';'. Para este
+    // momento la expresion ya fue reducida y queda un unico resultado en las
+    // pilas de trabajo.
     // La asignación se cierra fuera de POper: '=' pertenece a EST_ASIG,
     // mientras que POper únicamente contiene operadores de EXPR.
     if (estado.idDestinoAsignacion.empty() ||
@@ -494,6 +562,13 @@ void finalizarAsignacion(EstadoSemantico& estado) {
 // ============================================================================
 
 namespace EntradaSalida {
+
+// --------------------------------------------------------------------------
+// MODULO 4: ENTRADA Y SALIDA
+//
+// Estas funciones validan destinos y generan cuadruplos input/output. La
+// forma exacta aceptada la determina la gramatica actual del Parser.
+// --------------------------------------------------------------------------
 
 void validarDestinoEntrada(
     const EstadoSemantico& estado,
@@ -562,6 +637,17 @@ int generarSalida(
 // ============================================================================
 
 namespace GeneracionCodigo {
+
+// --------------------------------------------------------------------------
+// MODULO 5: GENERACION DE CODIGO INTERMEDIO
+//
+// Aqui se transforma una reduccion semantica en un cuadruplo:
+//
+//     op1 operador op2 -> temporal
+//
+// AVAIL permite reutilizar temporales que ya dejaron de ser necesarios.
+// CONT identifica el numero consecutivo de cada cuadruplo.
+// --------------------------------------------------------------------------
 
 void apilarOperando(
     EstadoSemantico& estado,
@@ -637,6 +723,8 @@ void reducirOperacion(
     EstadoSemantico& estado,
     const std::string& operador
 ) {
+    // La validacion ocurre antes de extraer los operandos. Si el cubo falla,
+    // las pilas conservan su informacion para facilitar el diagnostico.
     exigirPilasAlineadas(estado);
     if (estado.PilaO.size() < 2) {
         throw std::logic_error(
@@ -717,6 +805,13 @@ int precedencia(const std::string& operador) {
 
 namespace ControlFlujo {
 
+// --------------------------------------------------------------------------
+// MODULO 6: CONTROL DE FLUJO
+//
+// PSaltos conserva cuadruplos cuyo destino aun se desconoce. La funcion de
+// backpatching completa posteriormente el campo RES con la instruccion real.
+// --------------------------------------------------------------------------
+
 int generarSalto(
     EstadoSemantico& estado,
     const std::string& operador,
@@ -754,6 +849,9 @@ void completarSalto(
 // ============================================================================
 
 void reiniciarEstado(EstadoSemantico& estado) {
+    // Cada pulsacion de Analizar debe iniciar desde un estado limpio. Si no
+    // se vaciaran las pilas, los simbolos y CONT de una ejecucion anterior
+    // contaminarian la siguiente.
     estado.tablaSimbolos.clear();
     estado.cuadruplos.clear();
     estado.identificadoresPendientes.clear();

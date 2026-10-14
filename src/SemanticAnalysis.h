@@ -8,11 +8,15 @@
 #include <vector>
 
 /**
- * Resultado de la primera integración semántica.
+ * Resultado que consume la ventana semantica.
  *
- * SemanticParser contiene las acciones individuales. Esta clase las coordina
- * sobre la secuencia de tokens ya aceptada por Parser y prepara el texto que
- * la ventana semántica mostrará al usuario.
+ * En la integracion actual, Parser llena `estado` mientras analiza. Por eso
+ * `analizar()` ya no es el camino principal de ejecucion: se conserva como
+ * herramienta auxiliar/legacy para escenarios que necesiten procesar una
+ * secuencia de tokens de forma independiente.
+ *
+ * Los formateadores estaticos si son parte del camino actual y preparan la
+ * representacion legible de pilas y cuadruplos que SemanticWindow presenta.
  */
 struct SemanticAnalysisResult {
     Semantica::EstadoSemantico estado;
@@ -23,9 +27,9 @@ struct SemanticAnalysisResult {
 class SemanticAnalysis {
 public:
     /**
-     * Ejecuta la fase semántica sobre tokens de un programa sintácticamente
-     * correcto. En esta primera etapa procesa declaraciones, asignaciones,
-     * expresiones, input y output.
+     * Ejecuta el recorrido semantico independiente conservado por
+     * compatibilidad. El flujo normal de la aplicacion usa las acciones
+     * embebidas de Parser::Analiza() y no vuelve a llamar este metodo.
      */
     SemanticAnalysisResult analizar(const std::vector<Token>& tokens) const;
 

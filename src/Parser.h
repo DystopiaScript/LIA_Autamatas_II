@@ -140,14 +140,21 @@ private:
                                            // (estilo "Pila de Ejecución" vista en clase)
     bool sintaxisCorrecta;                 // Resultado final del análisis
 
-    // Estado generado por las acciones semánticas embebidas en el driver.
+    // =====================================================================
+    // ESTADO DEL ANALISIS SEMANTICO EMBEBIDO
+    //
+    // El parser sigue siendo LL(1), pero ahora conserva tambien el estado
+    // necesario para ejecutar las acciones semanticas mientras aplica las
+    // producciones de la gramatica. De esta forma no es necesario volver a
+    // recorrer los tokens despues de terminar el analisis sintactico.
+    // =====================================================================
     Semantica::EstadoSemantico estadoSemantico;
     std::vector<std::string> erroresSemanticos;
-    bool semanticaCorrecta;
-    bool declaracionActiva;
-    bool asignacionActiva;
-    bool entradaPorIdentificadorActiva;
-    int parentesisDeExpresionAbiertos;
+    bool semanticaCorrecta;                 // Resultado de la fase semantica
+    bool declaracionActiva;                 // Se esta procesando una declaracion
+    bool asignacionActiva;                 // Se esta procesando una asignacion
+    bool entradaPorIdentificadorActiva;    // output(id, id, ...) segun gramatica
+    int parentesisDeExpresionAbiertos;     // Control de FACT -> ( EXPR )
 
     // ========== MATRIZ PREDICTIVA M[X, a] ==========
     /**
@@ -324,8 +331,34 @@ private:
     // ------------------------------------------------------------------
     // Puente entre las producciones LL(1) y las acciones semánticas.
     // ------------------------------------------------------------------
+    /**
+     * Ejecuta la accion asociada a una produccion de la gramatica.
+     *
+     * Ejemplos:
+     * - FACT -> id apila el identificador.
+     * - EXPR5' -> + EXPR5 guarda '+' en POper.
+     * - TERM' -> epsilon reduce *, / o %.
+     *
+     * Esta funcion se invoca cuando el driver decide aplicar la produccion,
+     * no cuando el lexer produce el token.
+     */
     void ejecutarAccionDeProduccion(int numeroProduccion);
+
+    /**
+     * Ejecuta la accion asociada a un match terminal.
+     *
+     * Se utiliza para acciones que necesitan el lexema concreto del token,
+     * como acumular un identificador o registrar el tipo de una declaracion.
+     */
     void ejecutarAccionDeMatch(int terminalEsperado);
+
+    /**
+     * Reduce operadores pendientes hasta el nivel de precedencia indicado.
+     *
+     * Los niveles usados son:
+     * 1 = OR, 2 = AND, 3 = relacionales, 4 = suma/resta,
+     * 5 = multiplicacion/division/modulo.
+     */
     void reducirOperadoresConPrecedenciaMinima(int precedenciaMinima);
 
     /**
