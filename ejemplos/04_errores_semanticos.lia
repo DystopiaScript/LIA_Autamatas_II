@@ -1,0 +1,19 @@
+$ ============================================================
+$ 04_errores_semanticos.lia
+$ Caso sintacticamente valido, pero semantico incorrecto.
+$ Debe reportar:
+$   1. uso de identificador no declarado.
+$   2. incompatibilidad de tipos en la asignacion.
+$   3. modulo aplicado a un REAL.
+$ ============================================================
+
+class ( ErroresSemanticos ) {
+
+def entero : int ;
+def real : float ;
+
+entero = noDeclarada + 1 ;
+entero = 3.14 ;
+real = 10.5 % 2 ;
+
+}

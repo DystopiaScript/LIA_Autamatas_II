@@ -6,6 +6,10 @@ namespace Semantica {
 
 namespace {
 
+// ============================================================================
+// UTILIDADES INTERNAS
+// ============================================================================
+
 bool esNumerico(TipoDato tipo) {
     return tipo == TipoDato::ENTERO || tipo == TipoDato::REAL;
 }
@@ -19,12 +23,30 @@ bool esRelacional(const std::string& operador) {
 void exigirPilasAlineadas(const EstadoSemantico& estado) {
     if (estado.PilaO.size() != estado.PTipos.size()) {
         throw std::logic_error(
-            "PilaO y PTipos deben contener la misma cantidad de elementos"
+            "[EXPRESIONES] PilaO y PTipos deben contener la misma cantidad "
+            "de elementos"
         );
     }
 }
 
+// Centraliza la diferencia entre una reducción binaria y la negación unaria.
+// Así los paréntesis y el fin de expresión aplican exactamente la misma regla.
+void reducirOperadorPendiente(
+    EstadoSemantico& estado,
+    const std::string& operador
+) {
+    if (operador == "!" || operador == "NEG") {
+        GeneracionCodigo::reducirOperacionUnaria(estado, operador);
+    } else {
+        GeneracionCodigo::reducirOperacion(estado, operador);
+    }
+}
+
 } // namespace
+
+// ============================================================================
+// REPRESENTACION DE TIPOS
+// ============================================================================
 
 std::string tipoToString(TipoDato tipo) {
     switch (tipo) {
@@ -38,6 +60,18 @@ std::string tipoToString(TipoDato tipo) {
     }
 }
 
+// ============================================================================
+// MODULO 1: VERIFICACION SEMANTICA
+//
+// Responsabilidad:
+// - tabla de simbolos;
+// - tipos de operandos;
+// - cubo semantico;
+// - compatibilidad de operaciones y asignaciones.
+//
+// Este modulo NO genera cuadruplos.
+// ============================================================================
+
 namespace VerificacionSemantica {
 
 void registrarSimbolo(
@@ -46,11 +80,15 @@ void registrarSimbolo(
     TipoDato tipo
 ) {
     if (id.empty() || tipo == TipoDato::ERROR_SEMANTICO) {
-        throw std::invalid_argument("Identificador o tipo invalido");
+        throw std::invalid_argument(
+            "[TABLA DE SIMBOLOS] Identificador o tipo invalido"
+        );
     }
 
     if (estado.tablaSimbolos.find(id) != estado.tablaSimbolos.end()) {
-        throw std::runtime_error("Identificador redeclarado: " + id);
+        throw std::runtime_error(
+            "[TABLA DE SIMBOLOS] Identificador redeclarado: " + id
+        );
     }
 
     Simbolo simbolo;
@@ -66,14 +104,18 @@ const Simbolo& buscarSimbolo(
 ) {
     const auto it = estado.tablaSimbolos.find(id);
     if (it == estado.tablaSimbolos.end()) {
-        throw std::runtime_error("Identificador no declarado: " + id);
+        throw std::runtime_error(
+            "[TABLA DE SIMBOLOS] Identificador no declarado: " + id
+        );
     }
     return it->second;
 }
 
 void apilarTipo(EstadoSemantico& estado, TipoDato tipo) {
     if (tipo == TipoDato::ERROR_SEMANTICO) {
-        throw std::invalid_argument("No se puede apilar un tipo invalido");
+        throw std::invalid_argument(
+            "[TIPOS] No se puede apilar un tipo invalido"
+        );
     }
     estado.PTipos.push(tipo);
 }
@@ -128,22 +170,55 @@ void validarOperacion(
     const std::string& operador
 ) {
     if (estado.PTipos.size() < 2) {
-        throw std::logic_error("Faltan tipos para validar la operacion");
+        throw std::logic_error(
+            "[TIPOS] Faltan tipos para validar la operacion binaria"
+        );
     }
 
-    const TipoDato t2 = estado.PTipos.top();
-    estado.PTipos.pop();
-    const TipoDato t1 = estado.PTipos.top();
-    estado.PTipos.pop();
+    auto tipos = estado.PTipos;
+    const TipoDato t2 = tipos.top();
+    tipos.pop();
+    const TipoDato t1 = tipos.top();
     const TipoDato resultado = CuboSemantico(t1, operador, t2);
 
     if (resultado == TipoDato::ERROR_SEMANTICO) {
         throw std::runtime_error(
-            "Tipos incompatibles para el operador '" + operador + "'"
+            "[TIPOS] Tipos incompatibles para el operador '" +
+            operador + "'"
         );
     }
 
+    estado.PTipos.pop();
+    estado.PTipos.pop();
     estado.PTipos.push(resultado);
+}
+
+void validarOperacionUnaria(
+    EstadoSemantico& estado,
+    const std::string& operador
+) {
+    if (estado.PTipos.empty()) {
+        throw std::logic_error(
+            "[TIPOS] Falta tipo para validar la operacion unaria"
+        );
+    }
+
+    const TipoDato tipo = estado.PTipos.top();
+    const bool negacionLogica =
+        operador == "!" && tipo == TipoDato::BOOLEANO;
+    const bool negacionNumerica =
+        operador == "NEG" && esNumerico(tipo);
+
+    if (!negacionLogica && !negacionNumerica) {
+        throw std::runtime_error(
+            "[TIPOS] Tipo incompatible para el operador unario '" +
+            operador + "'"
+        );
+    }
+    estado.PTipos.pop();
+    estado.PTipos.push(
+        negacionLogica ? TipoDato::BOOLEANO : tipo
+    );
 }
 
 bool tiposCompatiblesAsignacion(TipoDato destino, TipoDato fuente) {
@@ -156,6 +231,12 @@ void iniciarAsignacion(
     const std::string& idDestino
 ) {
     const Simbolo& simbolo = buscarSimbolo(estado, idDestino);
+    if (simbolo.esConstante) {
+        throw std::runtime_error(
+            "[ASIGNACION] Una constante no puede ser destino: " +
+            idDestino
+        );
+    }
     estado.idDestinoAsignacion = idDestino;
     estado.tipoDestinoAsignacion = simbolo.tipo;
 }
@@ -168,7 +249,7 @@ void validarAsignacion(
             estado.tipoDestinoAsignacion,
             tipoExpresion)) {
         throw std::runtime_error(
-            "Incompatibilidad de tipos en la asignacion de '" +
+            "[TIPOS] Incompatibilidad de tipos en la asignacion de '" +
             estado.idDestinoAsignacion + "'"
         );
     }
@@ -193,6 +274,293 @@ void registrarDeclaracion(
 
 } // namespace VerificacionSemantica
 
+// ============================================================================
+// MODULO 2: DECLARACIONES
+//
+// Las declaraciones de variables acumulan ids y les asignan un tipo al llegar
+// a TIPO. Las constantes se registran con valor y no pueden ser destinos de
+// asignacion o entrada.
+// ============================================================================
+
+namespace Declaraciones {
+
+void iniciarDeclaracion(EstadoSemantico& estado) {
+    estado.identificadoresPendientes.clear();
+}
+
+void acumularIdentificador(
+    EstadoSemantico& estado,
+    const std::string& id
+) {
+    if (id.empty()) {
+        throw std::invalid_argument(
+            "[DECLARACIONES] No se puede declarar un identificador vacio"
+        );
+    }
+    VerificacionSemantica::acumularIdentificadorDeclaracion(estado, id);
+}
+
+void declararVariables(
+    EstadoSemantico& estado,
+    TipoDato tipo
+) {
+    VerificacionSemantica::registrarDeclaracion(estado, tipo);
+}
+
+void declararConstante(
+    EstadoSemantico& estado,
+    const std::string& id,
+    TipoDato tipo,
+    const std::string& valor
+) {
+    if (id.empty() || valor.empty() ||
+        tipo == TipoDato::ERROR_SEMANTICO) {
+        throw std::invalid_argument(
+            "[DECLARACIONES] Datos invalidos para declarar una constante"
+        );
+    }
+
+    if (estado.tablaSimbolos.find(id) != estado.tablaSimbolos.end()) {
+        throw std::runtime_error(
+            "[DECLARACIONES] Identificador redeclarado: " + id
+        );
+    }
+
+    Simbolo simbolo;
+    simbolo.id = id;
+    simbolo.tipo = tipo;
+    simbolo.direccionRAM = estado.siguienteDireccionRAM++;
+    simbolo.esConstante = true;
+    simbolo.inicializada = true;
+    simbolo.valorConstante = valor;
+    estado.tablaSimbolos.emplace(id, simbolo);
+}
+
+} // namespace Declaraciones
+
+// ============================================================================
+// MODULO 3: EXPRESIONES
+//
+// Este modulo representa las acciones del diagrama de expresiones:
+// FACT, TERM, EXPR5, relaciones, &&, ||, ! y parentesis.
+// PilaO y PTipos siempre avanzan sincronizadas. La reduccion delega la
+// validacion al cubo semantico y la generacion al modulo de cuadruplos.
+// ============================================================================
+
+namespace Expresiones {
+
+void apilarIdentificador(
+    EstadoSemantico& estado,
+    const std::string& id
+) {
+    const Simbolo& simbolo =
+        VerificacionSemantica::buscarSimbolo(estado, id);
+    if (simbolo.esConstante) {
+        GeneracionCodigo::apilarOperando(
+            estado,
+            simbolo.valorConstante
+        );
+    } else {
+        GeneracionCodigo::apilarOperando(
+            estado,
+            std::to_string(simbolo.direccionRAM)
+        );
+    }
+    VerificacionSemantica::apilarTipo(estado, simbolo.tipo);
+}
+
+void apilarConstante(
+    EstadoSemantico& estado,
+    const std::string& valor,
+    TipoDato tipo
+) {
+    if (valor.empty() || tipo == TipoDato::ERROR_SEMANTICO) {
+        throw std::invalid_argument(
+            "[EXPRESIONES] Constante invalida en expresion"
+        );
+    }
+    GeneracionCodigo::apilarOperando(estado, valor);
+    VerificacionSemantica::apilarTipo(estado, tipo);
+}
+
+void recibirOperador(
+    EstadoSemantico& estado,
+    const std::string& operador
+) {
+    GeneracionCodigo::guardarOperador(estado, operador);
+}
+
+void recibirOperadorUnario(
+    EstadoSemantico& estado,
+    const std::string& operador
+) {
+    if (operador != "!" && operador != "-") {
+        throw std::invalid_argument(
+            "[EXPRESIONES] Operador unario no reconocido: " + operador
+        );
+    }
+    GeneracionCodigo::guardarOperador(
+        estado,
+        operador == "-" ? "NEG" : operador
+    );
+}
+
+void abrirParentesis(EstadoSemantico& estado) {
+    GeneracionCodigo::abrirParentesis(estado);
+}
+
+void cerrarParentesis(EstadoSemantico& estado) {
+    while (!estado.POper.empty() && estado.POper.top() != "(") {
+        const std::string operador = estado.POper.top();
+        estado.POper.pop();
+        reducirOperadorPendiente(estado, operador);
+    }
+    if (estado.POper.empty()) {
+        throw std::logic_error(
+            "[EXPRESIONES] Parentesis de cierre sin marca de apertura"
+        );
+    }
+    estado.POper.pop();
+}
+
+void finalizarOperacionPendiente(EstadoSemantico& estado) {
+    while (!estado.POper.empty() && estado.POper.top() != "(") {
+        const std::string operador = estado.POper.top();
+        estado.POper.pop();
+        reducirOperadorPendiente(estado, operador);
+    }
+}
+
+std::string obtenerResultado(EstadoSemantico& estado) {
+    if (estado.PilaO.empty() || estado.PTipos.empty()) {
+        throw std::logic_error(
+            "[EXPRESIONES] La expresion no produjo un resultado"
+        );
+    }
+    if (estado.PilaO.size() != estado.PTipos.size()) {
+        throw std::logic_error(
+            "[EXPRESIONES] PilaO y PTipos deben contener la misma cantidad "
+            "de elementos"
+        );
+    }
+
+    const std::string resultado = estado.PilaO.top();
+    estado.PilaO.pop();
+    estado.PTipos.pop();
+    return resultado;
+}
+
+void finalizarAsignacion(EstadoSemantico& estado) {
+    // La asignación se cierra fuera de POper: '=' pertenece a EST_ASIG,
+    // mientras que POper únicamente contiene operadores de EXPR.
+    if (estado.idDestinoAsignacion.empty() ||
+        estado.tipoDestinoAsignacion == TipoDato::ERROR_SEMANTICO) {
+        throw std::logic_error(
+            "[ASIGNACION] No existe un destino de asignacion activo"
+        );
+    }
+    if (estado.PilaO.empty() || estado.PTipos.empty()) {
+        throw std::logic_error(
+            "[ASIGNACION] La expresion no produjo un resultado"
+        );
+    }
+    if (estado.PilaO.size() != estado.PTipos.size()) {
+        throw std::logic_error(
+            "[ASIGNACION] PilaO y PTipos estan desalineadas"
+        );
+    }
+
+    VerificacionSemantica::validarAsignacion(
+        estado,
+        estado.PTipos.top()
+    );
+
+    const std::string expresion = estado.PilaO.top();
+    estado.PilaO.pop();
+    estado.PTipos.pop();
+    GeneracionCodigo::generarAsignacion(estado, expresion);
+
+    estado.idDestinoAsignacion.clear();
+    estado.tipoDestinoAsignacion = TipoDato::ERROR_SEMANTICO;
+}
+
+} // namespace Expresiones
+
+// ============================================================================
+// MODULO 4: ENTRADA Y SALIDA
+//
+// input solo acepta variables declaradas. output recibe el resultado de una
+// expresion ya evaluada. Ambas acciones generan un cuadruplo.
+// ============================================================================
+
+namespace EntradaSalida {
+
+void validarDestinoEntrada(
+    const EstadoSemantico& estado,
+    const std::string& id
+) {
+    const Simbolo& simbolo =
+        VerificacionSemantica::buscarSimbolo(estado, id);
+    if (simbolo.esConstante) {
+        throw std::runtime_error(
+            "[ENTRADA] Una constante no puede ser destino de input: " + id
+        );
+    }
+}
+
+int generarEntrada(
+    EstadoSemantico& estado,
+    const std::string& id
+) {
+    validarDestinoEntrada(estado, id);
+    const int indice = GeneracionCodigo::generarCuadruplo(
+        estado,
+        "input",
+        "_",
+        "_",
+        id
+    );
+    estado.tablaSimbolos.at(id).inicializada = true;
+    return indice;
+}
+
+int generarSalida(
+    EstadoSemantico& estado,
+    const std::string& resultadoExpresion
+) {
+    if (resultadoExpresion.empty()) {
+        throw std::invalid_argument(
+            "[SALIDA] No se puede generar output sin expresion"
+        );
+    }
+    const int indice = GeneracionCodigo::generarCuadruplo(
+        estado,
+        "output",
+        resultadoExpresion,
+        "_",
+        "_"
+    );
+    GeneracionCodigo::liberarTemporalAvail(
+        estado,
+        resultadoExpresion
+    );
+    return indice;
+}
+
+} // namespace EntradaSalida
+
+// ============================================================================
+// MODULO 5: GENERACION DE CODIGO INTERMEDIO
+//
+// Responsabilidad:
+// - PilaO y POper;
+// - AVAIL para temporales;
+// - CONT y vector de cuadruplos;
+// - reduccion de operaciones y asignaciones.
+//
+// La validacion de tipos se realiza llamando a VerificacionSemantica.
+// ============================================================================
+
 namespace GeneracionCodigo {
 
 void apilarOperando(
@@ -207,7 +575,9 @@ void guardarOperador(
     const std::string& operador
 ) {
     if (precedencia(operador) < 0) {
-        throw std::invalid_argument("Operador no reconocido: " + operador);
+        throw std::invalid_argument(
+            "[CUADRUPLOS] Operador no reconocido: " + operador
+        );
     }
     estado.POper.push(operador);
 }
@@ -220,12 +590,12 @@ void cerrarParentesis(EstadoSemantico& estado) {
     while (!estado.POper.empty() && estado.POper.top() != "(") {
         const std::string operador = estado.POper.top();
         estado.POper.pop();
-        reducirOperacion(estado, operador);
+        reducirOperadorPendiente(estado, operador);
     }
 
     if (estado.POper.empty()) {
         throw std::logic_error(
-            "Parentesis de cierre sin marca de apertura"
+            "[CUADRUPLOS] Parentesis de cierre sin marca de apertura"
         );
     }
     estado.POper.pop();
@@ -269,20 +639,43 @@ void reducirOperacion(
 ) {
     exigirPilasAlineadas(estado);
     if (estado.PilaO.size() < 2) {
-        throw std::logic_error("Faltan operandos para reducir");
+        throw std::logic_error(
+            "[CUADRUPLOS] Faltan operandos para reducir operacion binaria"
+        );
     }
+
+    VerificacionSemantica::validarOperacion(estado, operador);
 
     const std::string op2 = estado.PilaO.top();
     estado.PilaO.pop();
     const std::string op1 = estado.PilaO.top();
     estado.PilaO.pop();
 
-    VerificacionSemantica::validarOperacion(estado, operador);
-
     const std::string temporal = obtenerTemporalAvail(estado);
     generarCuadruplo(estado, operador, op1, op2, temporal);
     liberarTemporalAvail(estado, op1);
     liberarTemporalAvail(estado, op2);
+    apilarOperando(estado, temporal);
+}
+
+void reducirOperacionUnaria(
+    EstadoSemantico& estado,
+    const std::string& operador
+) {
+    if (estado.PilaO.empty() || estado.PTipos.empty()) {
+        throw std::logic_error(
+            "[CUADRUPLOS] Faltan operandos para reducir la operacion unaria"
+        );
+    }
+
+    VerificacionSemantica::validarOperacionUnaria(estado, operador);
+
+    const std::string operando = estado.PilaO.top();
+    estado.PilaO.pop();
+
+    const std::string temporal = obtenerTemporalAvail(estado);
+    generarCuadruplo(estado, operador, operando, "_", temporal);
+    liberarTemporalAvail(estado, operando);
     apilarOperando(estado, temporal);
 }
 
@@ -309,10 +702,18 @@ int precedencia(const std::string& operador) {
     if (esRelacional(operador)) return 3;
     if (operador == "+" || operador == "-") return 4;
     if (operador == "*" || operador == "/" || operador == "%") return 5;
+    if (operador == "!" || operador == "NEG") return 6;
     return -1;
 }
 
 } // namespace GeneracionCodigo
+
+// ============================================================================
+// MODULO 6: CONTROL DE FLUJO
+//
+// PSaltos conserva los indices de GOTOF/GOTO pendientes y completarSalto
+// realiza el backpatching cuando ya se conoce el destino.
+// ============================================================================
 
 namespace ControlFlujo {
 
@@ -340,13 +741,17 @@ void completarSalto(
     if (indiceCuadruplo < 0 ||
         indiceCuadruplo >= static_cast<int>(estado.cuadruplos.size())) {
         throw std::out_of_range(
-            "Indice de cuadruplo invalido durante backpatching"
+            "[SALTOS] Indice de cuadruplo invalido durante backpatching"
         );
     }
     estado.cuadruplos[indiceCuadruplo].res = std::to_string(destino);
 }
 
 } // namespace ControlFlujo
+
+// ============================================================================
+// LIMPIEZA DEL ESTADO
+// ============================================================================
 
 void reiniciarEstado(EstadoSemantico& estado) {
     estado.tablaSimbolos.clear();

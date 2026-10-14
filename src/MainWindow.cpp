@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "SemanticWindow.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QFile>
@@ -13,7 +14,8 @@
 // CONSTRUCTOR Y DESTRUCTOR
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent), lexer(nullptr), parser(nullptr), archivoActual(""), modificado(false) {
+    : QMainWindow(parent), lexer(nullptr), parser(nullptr),
+      ventanaSemantica(nullptr), archivoActual(""), modificado(false) {
 
     // Crear instancia del lexer
     lexer = new Lexer();
@@ -29,6 +31,11 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 MainWindow::~MainWindow() {
+    if (ventanaSemantica != nullptr) {
+        ventanaSemantica->close();
+        delete ventanaSemantica;
+        ventanaSemantica = nullptr;
+    }
     // Liberar memoria del lexer
     if (lexer != nullptr) {
         delete lexer;
@@ -229,6 +236,11 @@ void MainWindow::onLimpiar() {
     
     // Limpiar paneles
     limpiarPaneles();
+    if (ventanaSemantica != nullptr) {
+        ventanaSemantica->close();
+        delete ventanaSemantica;
+        ventanaSemantica = nullptr;
+    }
     
     // Reiniciar estado
     archivoActual = "";
@@ -271,6 +283,27 @@ void MainWindow::onAnalizar() {
     actualizarPanelTokens(lexer->getHistorialVisual());
     actualizarPanelSintaxis();
     actualizarPanelErrores(lexer->getErroresLexicos());
+
+    // La fase semántica sólo se ejecuta si léxico y sintaxis terminaron bien.
+    if (lexer->getErroresLexicos().empty() && parser->esCorrecto()) {
+        // El parser ya ejecutó las acciones semánticas embebidas mientras
+        // aplicaba las producciones LL(1). Aquí solamente empaquetamos su
+        // resultado para que la ventana lo presente.
+        SemanticAnalysisResult resultado;
+        resultado.estado = parser->getEstadoSemantico();
+        resultado.errores = parser->getErroresSemanticos();
+        resultado.correcto = parser->semanticaEsCorrecta();
+
+        if (ventanaSemantica != nullptr) {
+            ventanaSemantica->close();
+            delete ventanaSemantica;
+        }
+        ventanaSemantica = new SemanticWindow(resultado, this);
+        ventanaSemantica->setAttribute(Qt::WA_DeleteOnClose, false);
+        ventanaSemantica->show();
+        ventanaSemantica->raise();
+        ventanaSemantica->activateWindow();
+    }
 }
 
 void MainWindow::onSalir() {

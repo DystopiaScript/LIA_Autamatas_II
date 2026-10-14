@@ -1,5 +1,7 @@
 #include "Parser.h"
 
+#include <stdexcept>
+
 /**
  * @file Parser.cpp
  * @brief Implementación del Analizador Sintáctico Predictivo de LIA
@@ -163,7 +165,13 @@ const std::map<std::string, int> Parser::RESERVADA_A_CODIGO = {
 // ========== CONSTRUCTOR Y DESTRUCTOR ==========
 
 Parser::Parser()
-    : lexer(nullptr), sintaxisCorrecta(false) {
+    : lexer(nullptr),
+      sintaxisCorrecta(false),
+      semanticaCorrecta(true),
+      declaracionActiva(false),
+      asignacionActiva(false),
+      entradaPorIdentificadorActiva(false),
+      parentesisDeExpresionAbiertos(0) {
     // Constructor por defecto
 }
 
@@ -196,6 +204,7 @@ bool Parser::Analiza() {
     // Cada paso de la traza se registra ANTES de modificar la pila, para que
     // cada renglón muestre: pila actual | token actual | acción que se ejecuta
     // (mismo formato que la "Pila de Ejecución" vista en clase)
+    try {
     while (!pila.empty()) {
         int X = pila.top();             // símbolo del tope de la pila
         int a = codigoTokenActual();    // código del token actual (o $)
@@ -214,6 +223,18 @@ bool Parser::Analiza() {
                 // al léxico (esto es el "Dame_un_token()" / "Va_token" de clase)
                 registrarPaso(nombreSimbolo(X) + " = '" + lexemaActual() +
                               "'. Match: sacar de la pila y pedir nuevo token");
+                try {
+                    ejecutarAccionDeMatch(X);
+                } catch (const std::exception& error) {
+                    // La sintaxis puede continuar aunque una accion
+                    // semantica falle; ambas fases deben reportarse por
+                    // separado al usuario.
+                    semanticaCorrecta = false;
+                    erroresSemanticos.push_back(error.what());
+                    registrarPaso(
+                        "ERROR SEMANTICO: " + std::string(error.what())
+                    );
+                }
                 pila.pop();
                 tokenActual = lexer->Dame_un_token();
                 if (!validarTokenLexico()) {
@@ -247,6 +268,20 @@ bool Parser::Analiza() {
                 // derecho EN ORDEN INVERSO (el primer símbolo queda al tope)
                 int longitud = PRODUCCIONES[n - 1][0];
 
+                // Las acciones semánticas se ejecutan al reconocer la
+                // producción, antes de insertar sus símbolos. Esto permite
+                // colocar un operador en POper antes de analizar el operando
+                // que aparece a la derecha en la gramática LL(1).
+                try {
+                    ejecutarAccionDeProduccion(n);
+                } catch (const std::exception& error) {
+                    semanticaCorrecta = false;
+                    erroresSemanticos.push_back(error.what());
+                    registrarPaso(
+                        "ERROR SEMANTICO: " + std::string(error.what())
+                    );
+                }
+
                 if (longitud == 0) {
                     // Producción épsilon: solo se elimina X de la pila
                     registrarPaso("M[" + nombreSimbolo(X) + ", " + nombreSimbolo(a) +
@@ -273,6 +308,13 @@ bool Parser::Analiza() {
             }
         }
     }
+    } catch (const std::exception& error) {
+            // Un error semántico no debe convertirse artificialmente en un error
+            // sintáctico. Se conserva la traza y se informa en su propia fase.
+            semanticaCorrecta = false;
+            erroresSemanticos.push_back(error.what());
+            registrarPaso("ERROR SEMANTICO: " + std::string(error.what()));
+    }
     // Nota: ya no se necesita el chequeo de "tokens sobrantes": si tras el
     // programa quedan tokens, el tope será $ y el token actual será otro,
     // cayendo de forma natural en el CASO 3 (error de terminal).
@@ -291,6 +333,13 @@ void Parser::reset() {
     tokenActual = Token();   // token vacío hasta pedir el primero
     errores.clear();
     traza.clear();
+    Semantica::reiniciarEstado(estadoSemantico);
+    erroresSemanticos.clear();
+    semanticaCorrecta = true;
+    declaracionActiva = false;
+    asignacionActiva = false;
+    entradaPorIdentificadorActiva = false;
+    parentesisDeExpresionAbiertos = 0;
     // Vaciar la pila (std::stack no tiene clear())
     while (!pila.empty()) {
         pila.pop();
@@ -309,6 +358,255 @@ const std::vector<std::string>& Parser::getTraza() const {
 
 bool Parser::esCorrecto() const {
     return sintaxisCorrecta;
+}
+
+bool Parser::semanticaEsCorrecta() const {
+    return semanticaCorrecta;
+}
+
+const Semantica::EstadoSemantico& Parser::getEstadoSemantico() const {
+    return estadoSemantico;
+}
+
+const std::vector<std::string>& Parser::getErroresSemanticos() const {
+    return erroresSemanticos;
+}
+
+// ============================================================================
+// ACCIONES SEMANTICAS EMBEBIDAS EN EL DRIVER LL(1)
+//
+// La tabla sintactica sigue tomando todas las decisiones. Estas funciones
+// solamente agregan el efecto semantico que corresponde a cada produccion:
+// apilar operandos, guardar operadores, reducir expresiones y cerrar
+// declaraciones/asignaciones.
+// ============================================================================
+
+void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
+    using namespace Semantica;
+
+    switch (numeroProduccion) {
+        case 2: // DECLARA -> def id LID : TIPO ;
+            Declaraciones::iniciarDeclaracion(estadoSemantico);
+            declaracionActiva = true;
+            break;
+
+        case 20: // EST_ASIG -> id = EXPR ;
+            VerificacionSemantica::iniciarAsignacion(
+                estadoSemantico,
+                tokenActual.lexema
+            );
+            asignacionActiva = true;
+            break;
+
+        case 28: // input ( EXPR LEXPR ) ;
+            // La gramatica actual define input con expresiones. Cada
+            // expresion se convierte en un cuadruplo de salida al terminar.
+            break;
+
+        case 29: // LEXPR -> , EXPR LEXPR
+            // La expresion anterior termina justo antes de la coma.
+            if (!estadoSemantico.PilaO.empty()) {
+                const std::string resultado =
+                    Expresiones::obtenerResultado(estadoSemantico);
+                EntradaSalida::generarSalida(
+                    estadoSemantico,
+                    resultado
+                );
+            }
+            break;
+
+        case 30: // LEXPR -> epsilon
+            // Cierra la ultima expresion de input antes de ')'.
+            if (!estadoSemantico.PilaO.empty()) {
+                const std::string resultado =
+                    Expresiones::obtenerResultado(estadoSemantico);
+                EntradaSalida::generarSalida(
+                    estadoSemantico,
+                    resultado
+                );
+            }
+            break;
+
+        case 31: // output ( id LIDR ) ;
+            // En la gramatica existente output recibe identificadores.
+            entradaPorIdentificadorActiva = true;
+            break;
+
+        case 35: // EXPR' -> || EXPR
+            Expresiones::recibirOperador(estadoSemantico, "||");
+            break;
+        case 38: // EXPR2' -> && EXPR2
+            Expresiones::recibirOperador(estadoSemantico, "&&");
+            break;
+        case 40: // EXPR3 -> ! EXPR4
+            Expresiones::recibirOperadorUnario(estadoSemantico, "!");
+            break;
+        case 43: // EXPR4' -> OPREL EXPR5
+            Expresiones::recibirOperador(
+                estadoSemantico,
+                tokenActual.lexema
+            );
+            break;
+        case 52: // EXPR5' -> + EXPR5
+            Expresiones::recibirOperador(estadoSemantico, "+");
+            break;
+        case 53: // EXPR5' -> - EXPR5
+            Expresiones::recibirOperador(estadoSemantico, "-");
+            break;
+        case 56: // TERM' -> * TERM
+            Expresiones::recibirOperador(estadoSemantico, "*");
+            break;
+        case 57: // TERM' -> / TERM
+            Expresiones::recibirOperador(estadoSemantico, "/");
+            break;
+        case 58: // TERM' -> % TERM
+            Expresiones::recibirOperador(estadoSemantico, "%");
+            break;
+
+        case 60: // FACT -> id
+            Expresiones::apilarIdentificador(
+                estadoSemantico,
+                tokenActual.lexema
+            );
+            break;
+        case 61: // FACT -> cteentera
+            Expresiones::apilarConstante(
+                estadoSemantico,
+                tokenActual.lexema,
+                TipoDato::ENTERO
+            );
+            break;
+        case 62: // FACT -> ctereal
+        case 63: // FACT -> ctenotacion
+            Expresiones::apilarConstante(
+                estadoSemantico,
+                tokenActual.lexema,
+                TipoDato::REAL
+            );
+            break;
+        case 64: // FACT -> ctecaracter
+            Expresiones::apilarConstante(
+                estadoSemantico,
+                tokenActual.lexema,
+                TipoDato::CARACTER
+            );
+            break;
+        case 65: // FACT -> ctestring
+            Expresiones::apilarConstante(
+                estadoSemantico,
+                tokenActual.lexema,
+                TipoDato::CADENA
+            );
+            break;
+        case 66: // FACT -> ( EXPR )
+            Expresiones::abrirParentesis(estadoSemantico);
+            ++parentesisDeExpresionAbiertos;
+            break;
+
+        case 36: // EXPR' -> epsilon
+            reducirOperadoresConPrecedenciaMinima(1);
+            break;
+        case 39: // EXPR2' -> epsilon
+            reducirOperadoresConPrecedenciaMinima(2);
+            break;
+        case 44: // EXPR4' -> epsilon
+            reducirOperadoresConPrecedenciaMinima(3);
+            break;
+        case 54: // EXPR5' -> epsilon
+            reducirOperadoresConPrecedenciaMinima(4);
+            break;
+        case 59: // TERM' -> epsilon
+            reducirOperadoresConPrecedenciaMinima(5);
+            break;
+        default:
+            // Las demas producciones son puramente sintacticas por ahora.
+            break;
+    }
+}
+
+void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
+    using namespace Semantica;
+
+    // El identificador de una declaracion se acumula antes de conocer el tipo.
+    if (declaracionActiva && terminalEsperado == IDENTIFICADOR) {
+        Declaraciones::acumularIdentificador(
+            estadoSemantico,
+            tokenActual.lexema
+        );
+    }
+
+    // El tipo cierra semanticamente la declaracion de variables.
+    if (declaracionActiva &&
+        (terminalEsperado == PR_INT ||
+         terminalEsperado == PR_FLOAT ||
+         terminalEsperado == PR_CHAR ||
+         terminalEsperado == PR_BOOL ||
+         terminalEsperado == PR_STRING)) {
+        TipoDato tipo = TipoDato::ERROR_SEMANTICO;
+        if (terminalEsperado == PR_INT) tipo = TipoDato::ENTERO;
+        if (terminalEsperado == PR_FLOAT) tipo = TipoDato::REAL;
+        if (terminalEsperado == PR_CHAR) tipo = TipoDato::CARACTER;
+        if (terminalEsperado == PR_BOOL) tipo = TipoDato::BOOLEANO;
+        if (terminalEsperado == PR_STRING) tipo = TipoDato::CADENA;
+        Declaraciones::declararVariables(estadoSemantico, tipo);
+    }
+
+    // output (id, id, ...) segun la gramatica existente.
+    if (entradaPorIdentificadorActiva &&
+        terminalEsperado == IDENTIFICADOR) {
+        EntradaSalida::generarEntrada(
+            estadoSemantico,
+            tokenActual.lexema
+        );
+    }
+
+    // Cierre de un parentesis que fue abierto por FACT -> ( EXPR ).
+    if (terminalEsperado == PAREN_CIERRA &&
+        parentesisDeExpresionAbiertos > 0) {
+        Expresiones::cerrarParentesis(estadoSemantico);
+        --parentesisDeExpresionAbiertos;
+    }
+
+    // '=' no entra en POper. Solo termina el contexto de una asignacion.
+    if (asignacionActiva && terminalEsperado == PUNTO_COMA) {
+        Expresiones::finalizarAsignacion(estadoSemantico);
+        asignacionActiva = false;
+    }
+
+    if (declaracionActiva && terminalEsperado == PUNTO_COMA) {
+        declaracionActiva = false;
+    }
+
+    if (entradaPorIdentificadorActiva && terminalEsperado == PUNTO_COMA) {
+        entradaPorIdentificadorActiva = false;
+    }
+}
+
+void Parser::reducirOperadoresConPrecedenciaMinima(
+    int precedenciaMinima
+) {
+    using namespace Semantica;
+
+    while (!estadoSemantico.POper.empty() &&
+           estadoSemantico.POper.top() != "(" &&
+           GeneracionCodigo::precedencia(
+               estadoSemantico.POper.top()
+           ) >= precedenciaMinima) {
+        const std::string operador = estadoSemantico.POper.top();
+        estadoSemantico.POper.pop();
+
+        if (operador == "!" || operador == "NEG") {
+            GeneracionCodigo::reducirOperacionUnaria(
+                estadoSemantico,
+                operador
+            );
+        } else {
+            GeneracionCodigo::reducirOperacion(
+                estadoSemantico,
+                operador
+            );
+        }
+    }
 }
 
 // ========== FUNCIONES AUXILIARES (PUENTE LEXER-PARSER) ==========

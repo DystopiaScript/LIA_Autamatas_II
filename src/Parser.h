@@ -8,6 +8,7 @@
 #include "Token.h"
 #include "ErrorSintactico.h"
 #include "Lexer.h"
+#include "SemanticParser.h"
 
 /**
  * @file Parser.h
@@ -139,6 +140,15 @@ private:
                                            // (estilo "Pila de Ejecución" vista en clase)
     bool sintaxisCorrecta;                 // Resultado final del análisis
 
+    // Estado generado por las acciones semánticas embebidas en el driver.
+    Semantica::EstadoSemantico estadoSemantico;
+    std::vector<std::string> erroresSemanticos;
+    bool semanticaCorrecta;
+    bool declaracionActiva;
+    bool asignacionActiva;
+    bool entradaPorIdentificadorActiva;
+    int parentesisDeExpresionAbiertos;
+
     // ========== MATRIZ PREDICTIVA M[X, a] ==========
     /**
      * 29 filas (no terminales) x 45 columnas (terminales + $).
@@ -230,6 +240,21 @@ public:
      */
     bool esCorrecto() const;
 
+    /**
+     * @brief Indica si las acciones semánticas terminaron sin errores.
+     */
+    bool semanticaEsCorrecta() const;
+
+    /**
+     * @brief Devuelve el estado producido durante el análisis semántico.
+     */
+    const Semantica::EstadoSemantico& getEstadoSemantico() const;
+
+    /**
+     * @brief Devuelve los errores semánticos producidos por el parser.
+     */
+    const std::vector<std::string>& getErroresSemanticos() const;
+
 private:
     // ========== FUNCIONES AUXILIARES (el "puente" lexer-parser) ==========
     /**
@@ -295,6 +320,13 @@ private:
      * salen DIRECTO de la matriz (los FIRST de la fila).
      */
     std::string esperadosDe(int codigoNoTerminal) const;
+
+    // ------------------------------------------------------------------
+    // Puente entre las producciones LL(1) y las acciones semánticas.
+    // ------------------------------------------------------------------
+    void ejecutarAccionDeProduccion(int numeroProduccion);
+    void ejecutarAccionDeMatch(int terminalEsperado);
+    void reducirOperadoresConPrecedenciaMinima(int precedenciaMinima);
 
     /**
      * @brief Registra un error sintáctico en la lista
