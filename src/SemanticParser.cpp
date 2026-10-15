@@ -1,6 +1,11 @@
 #include "SemanticParser.h"
 
+#include <cmath>
+#include <algorithm>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
+#include <utility>
 
 namespace Semantica {
 
@@ -266,6 +271,9 @@ void iniciarAsignacion(
     EstadoSemantico& estado,
     const std::string& idDestino
 ) {
+    // La busqueda ocurre antes de analizar la expresion derecha. Asi se
+    // rechaza inmediatamente `PI = ...` y nunca se genera codigo que intente
+    // modificar una constante.
     const Simbolo& simbolo = buscarSimbolo(estado, idDestino);
     if (simbolo.esConstante) {
         throw std::runtime_error(
@@ -281,6 +289,9 @@ void validarAsignacion(
     EstadoSemantico& estado,
     TipoDato tipoExpresion
 ) {
+    // Esta es la segunda validacion de la asignacion: primero se valida el
+    // destino, y aqui se compara el tipo de la expresion ya reducida con el
+    // tipo declarado. ENTERO -> REAL es la unica conversion implicita.
     if (!tiposCompatiblesAsignacion(
             estado.tipoDestinoAsignacion,
             tipoExpresion)) {
@@ -361,10 +372,45 @@ void declararConstante(
     TipoDato tipo,
     const std::string& valor
 ) {
+    // Esta funcion recibe la informacion que Parser fue acumulando durante:
+    //
+    //     const id : TIPO = FACT ;
+    //
+    // Registrar aqui, y no al leer `const`, evita crear simbolos incompletos.
     if (id.empty() || valor.empty() ||
         tipo == TipoDato::ERROR_SEMANTICO) {
         throw std::invalid_argument(
             "[DECLARACIONES] Datos invalidos para declarar una constante"
+        );
+    }
+
+    // En esta primera sintaxis la constante debe inicializarse con un literal
+    // compatible con el tipo declarado. Las expresiones como `const A : int =
+    // 2 + 3` se pueden habilitar después con una producción más amplia.
+    const bool esReal =
+        valor.find('.') != std::string::npos ||
+        valor.find('e') != std::string::npos ||
+        valor.find('E') != std::string::npos;
+    if (tipo == TipoDato::ENTERO && esReal) {
+        throw std::runtime_error(
+            "[CONSTANTES] Un valor real no puede declararse como ENTERO"
+        );
+    }
+    if (tipo == TipoDato::REAL && valor.find('\'') != std::string::npos) {
+        throw std::runtime_error(
+            "[CONSTANTES] El valor de REAL debe ser numerico"
+        );
+    }
+    if (tipo == TipoDato::CARACTER &&
+        !(valor.size() >= 3 && valor.front() == '\'' && valor.back() == '\'')) {
+        throw std::runtime_error(
+            "[CONSTANTES] El valor de CARACTER debe usar comillas simples"
+        );
+    }
+    if (tipo == TipoDato::CADENA &&
+        !(valor.size() >= 2 && valor.front() == '"' && valor.back() == '"')) {
+        throw std::runtime_error(
+            "[CONSTANTES] El valor de CADENA debe usar comillas dobles"
         );
     }
 
@@ -381,6 +427,8 @@ void declararConstante(
     simbolo.esConstante = true;
     simbolo.inicializada = true;
     simbolo.valorConstante = valor;
+    simbolo.valorConocido = true;
+    simbolo.valorActual = valor;
     estado.tablaSimbolos.emplace(id, simbolo);
 }
 
@@ -414,8 +462,9 @@ void apilarIdentificador(
     EstadoSemantico& estado,
     const std::string& id
 ) {
-    // Una variable se representa por su direccion logica; una constante se
-    // representa por su valor literal almacenado en la tabla de simbolos.
+    // Una variable se representa en una expresion por su direccion logica;
+    // una constante se representa por su valor literal almacenado. Ambos
+    // caminos apilan despues el tipo, manteniendo PilaO y PTipos alineadas.
     const Simbolo& simbolo =
         VerificacionSemantica::buscarSimbolo(estado, id);
     if (simbolo.esConstante) {
@@ -429,7 +478,18 @@ void apilarIdentificador(
             std::to_string(simbolo.direccionRAM)
         );
     }
+    if (simbolo.valorConocido) {
+        estado.valoresTemporales[
+            simbolo.esConstante
+                ? simbolo.valorConstante
+                : std::to_string(simbolo.direccionRAM)
+        ] = simbolo.valorActual;
+    }
     VerificacionSemantica::apilarTipo(estado, simbolo.tipo);
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "PUSH tipo: " + tipoToString(simbolo.tipo)
+    );
 }
 
 void apilarConstante(
@@ -446,6 +506,10 @@ void apilarConstante(
     }
     GeneracionCodigo::apilarOperando(estado, valor);
     VerificacionSemantica::apilarTipo(estado, tipo);
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "PUSH constante: " + valor
+    );
 }
 
 void recibirOperador(
@@ -558,7 +622,11 @@ void finalizarAsignacion(EstadoSemantico& estado) {
 // MODULO 4: ENTRADA Y SALIDA
 //
 // input solo acepta variables declaradas. output recibe el resultado de una
-// expresion ya evaluada. Ambas acciones generan un cuadruplo.
+// expresion ya evaluada y lo coloca en RESULTADO del cuadruplo:
+//
+//     (output, _, _, resultado)
+//
+// Ambas acciones generan un cuadruplo.
 // ============================================================================
 
 namespace EntradaSalida {
@@ -587,6 +655,9 @@ int generarEntrada(
     EstadoSemantico& estado,
     const std::string& id
 ) {
+    // input invalida el valor conocido porque la ejecucion real aun no ha
+    // ocurrido. La variable sigue marcada como inicializada, pero su valor
+    // estatico se muestra como desconocido.
     validarDestinoEntrada(estado, id);
     const int indice = GeneracionCodigo::generarCuadruplo(
         estado,
@@ -596,6 +667,12 @@ int generarEntrada(
         id
     );
     estado.tablaSimbolos.at(id).inicializada = true;
+    estado.tablaSimbolos.at(id).valorConocido = false;
+    estado.tablaSimbolos.at(id).valorActual.clear();
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "INPUT -> " + id
+    );
     return indice;
 }
 
@@ -611,13 +688,17 @@ int generarSalida(
     const int indice = GeneracionCodigo::generarCuadruplo(
         estado,
         "output",
-        resultadoExpresion,
         "_",
-        "_"
+        "_",
+        resultadoExpresion
     );
     GeneracionCodigo::liberarTemporalAvail(
         estado,
         resultadoExpresion
+    );
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "OUTPUT <- " + resultadoExpresion
     );
     return indice;
 }
@@ -638,6 +719,81 @@ int generarSalida(
 
 namespace GeneracionCodigo {
 
+namespace {
+
+std::string valorConocido(
+    const EstadoSemantico& estado,
+    const std::string& operando
+) {
+    // Busca primero resultados de temporales o variables propagados. Si no
+    // existe una entrada, intenta reconocer un literal numerico o booleano.
+    // Un identificador no inicializado y un resultado de input no entran.
+    const auto temporal = estado.valoresTemporales.find(operando);
+    if (temporal != estado.valoresTemporales.end()) {
+        return temporal->second;
+    }
+
+    if (operando == "true" || operando == "false") {
+        return operando;
+    }
+
+    try {
+        std::stod(operando);
+        return operando;
+    } catch (const std::exception&) {
+        return {};
+    }
+}
+
+std::string formatearNumero(double valor, bool entero) {
+    if (entero) {
+        return std::to_string(static_cast<long long>(valor));
+    }
+    std::ostringstream salida;
+    salida << std::setprecision(12) << valor;
+    return salida.str();
+}
+
+std::string calcularValor(
+    const std::string& operador,
+    const std::string& op1,
+    const std::string& op2
+) {
+    // Esta evaluacion es una ayuda de visualizacion y propagacion semantica.
+    // El cuadruplo siempre se genera aunque no sea posible calcular su valor.
+    const bool esEntero =
+        op1.find('.') == std::string::npos &&
+        op2.find('.') == std::string::npos;
+    const double valor1 = std::stod(op1);
+    const double valor2 = std::stod(op2);
+
+    if (operador == "+") return formatearNumero(valor1 + valor2, esEntero);
+    if (operador == "-") return formatearNumero(valor1 - valor2, esEntero);
+    if (operador == "*") return formatearNumero(valor1 * valor2, esEntero);
+    if (operador == "/") return formatearNumero(valor1 / valor2, false);
+    if (operador == "%") {
+        return std::to_string(
+            static_cast<long long>(valor1) %
+            static_cast<long long>(valor2)
+        );
+    }
+    if (operador == "==" || operador == "!=" ||
+        operador == "<" || operador == "<=" ||
+        operador == ">" || operador == ">=") {
+        bool resultado = false;
+        if (operador == "==") resultado = valor1 == valor2;
+        if (operador == "!=") resultado = valor1 != valor2;
+        if (operador == "<") resultado = valor1 < valor2;
+        if (operador == "<=") resultado = valor1 <= valor2;
+        if (operador == ">") resultado = valor1 > valor2;
+        if (operador == ">=") resultado = valor1 >= valor2;
+        return resultado ? "true" : "false";
+    }
+    return {};
+}
+
+} // namespace
+
 // --------------------------------------------------------------------------
 // MODULO 5: GENERACION DE CODIGO INTERMEDIO
 //
@@ -649,11 +805,58 @@ namespace GeneracionCodigo {
 // CONT identifica el numero consecutivo de cada cuadruplo.
 // --------------------------------------------------------------------------
 
+void registrarEstadoPilas(
+    EstadoSemantico& estado,
+    const std::string& accion
+) {
+    HistorialPilas historial;
+    historial.paso = static_cast<int>(estado.historialPilas.size()) + 1;
+    historial.accion = accion;
+
+    auto operandos = estado.PilaO;
+    while (!operandos.empty()) {
+        historial.operandos.push_back(operandos.top());
+        operandos.pop();
+    }
+    std::reverse(historial.operandos.begin(), historial.operandos.end());
+
+    auto tipos = estado.PTipos;
+    while (!tipos.empty()) {
+        historial.tipos.push_back(tipoToString(tipos.top()));
+        tipos.pop();
+    }
+    std::reverse(historial.tipos.begin(), historial.tipos.end());
+
+    auto operadores = estado.POper;
+    while (!operadores.empty()) {
+        historial.operadores.push_back(operadores.top());
+        operadores.pop();
+    }
+    std::reverse(historial.operadores.begin(), historial.operadores.end());
+
+    auto avail = estado.temporalesDisponibles;
+    while (!avail.empty()) {
+        historial.avail.push_back(avail.top());
+        avail.pop();
+    }
+    std::reverse(historial.avail.begin(), historial.avail.end());
+
+    auto saltos = estado.PSaltos;
+    while (!saltos.empty()) {
+        historial.saltos.push_back(saltos.top());
+        saltos.pop();
+    }
+    std::reverse(historial.saltos.begin(), historial.saltos.end());
+
+    estado.historialPilas.push_back(std::move(historial));
+}
+
 void apilarOperando(
     EstadoSemantico& estado,
     const std::string& operando
 ) {
     estado.PilaO.push(operando);
+    registrarEstadoPilas(estado, "PUSH operando: " + operando);
 }
 
 void guardarOperador(
@@ -666,10 +869,12 @@ void guardarOperador(
         );
     }
     estado.POper.push(operador);
+    registrarEstadoPilas(estado, "PUSH operador: " + operador);
 }
 
 void abrirParentesis(EstadoSemantico& estado) {
     estado.POper.push("(");
+    registrarEstadoPilas(estado, "PUSH marca: (");
 }
 
 void cerrarParentesis(EstadoSemantico& estado) {
@@ -685,6 +890,7 @@ void cerrarParentesis(EstadoSemantico& estado) {
         );
     }
     estado.POper.pop();
+    registrarEstadoPilas(estado, "POP marca: )");
 }
 
 std::string obtenerTemporalAvail(EstadoSemantico& estado) {
@@ -741,9 +947,26 @@ void reducirOperacion(
 
     const std::string temporal = obtenerTemporalAvail(estado);
     generarCuadruplo(estado, operador, op1, op2, temporal);
+    // Primero se genera el cuadruplo. Luego, solo si ambos operandos tienen
+    // valor conocido, se calcula tambien el temporal para la interfaz.
+    const std::string valor1 = valorConocido(estado, op1);
+    const std::string valor2 = valorConocido(estado, op2);
+    if (!valor1.empty() && !valor2.empty()) {
+        try {
+            estado.valoresTemporales[temporal] =
+                calcularValor(operador, valor1, valor2);
+        } catch (const std::exception&) {
+            estado.valoresTemporales.erase(temporal);
+        }
+    }
     liberarTemporalAvail(estado, op1);
     liberarTemporalAvail(estado, op2);
     apilarOperando(estado, temporal);
+    registrarEstadoPilas(
+        estado,
+        "REDUCCION " + op1 + " " + operador + " " + op2 +
+        " -> " + temporal
+    );
 }
 
 void reducirOperacionUnaria(
@@ -763,25 +986,57 @@ void reducirOperacionUnaria(
 
     const std::string temporal = obtenerTemporalAvail(estado);
     generarCuadruplo(estado, operador, operando, "_", temporal);
+    const std::string valor = valorConocido(estado, operando);
+    if (!valor.empty()) {
+        if (operador == "!" && (valor == "true" || valor == "false")) {
+            estado.valoresTemporales[temporal] =
+                valor == "true" ? "false" : "true";
+        } else if (operador == "NEG") {
+            try {
+                estado.valoresTemporales[temporal] =
+                    formatearNumero(-std::stod(valor), valor.find('.') == std::string::npos);
+            } catch (const std::exception&) {
+                estado.valoresTemporales.erase(temporal);
+            }
+        }
+    }
     liberarTemporalAvail(estado, operando);
     apilarOperando(estado, temporal);
+    registrarEstadoPilas(
+        estado,
+        "REDUCCION " + operador + " " + operando + " -> " + temporal
+    );
 }
 
 void generarAsignacion(
     EstadoSemantico& estado,
     const std::string& expresion
 ) {
+    // La asignacion siempre genera codigo intermedio. La propagacion de
+    // valor es independiente: si la expresion es conocida, se copia al
+    // simbolo destino; si no, se conserva como desconocida.
     generarCuadruplo(
         estado,
-        ":=",
+        "=",
         expresion,
         "_",
         estado.idDestinoAsignacion
     );
     liberarTemporalAvail(estado, expresion);
-    estado.tablaSimbolos.at(
-        estado.idDestinoAsignacion
-    ).inicializada = true;
+    Simbolo& destino = estado.tablaSimbolos.at(estado.idDestinoAsignacion);
+    destino.inicializada = true;
+    const std::string valor = valorConocido(estado, expresion);
+    destino.valorConocido = !valor.empty();
+    destino.valorActual = valor;
+    if (destino.valorConocido) {
+        estado.valoresTemporales[
+            std::to_string(destino.direccionRAM)
+        ] = valor;
+    }
+    registrarEstadoPilas(
+        estado,
+        "ASIGNACION -> " + estado.idDestinoAsignacion
+    );
 }
 
 int precedencia(const std::string& operador) {
@@ -854,6 +1109,8 @@ void reiniciarEstado(EstadoSemantico& estado) {
     // contaminarian la siguiente.
     estado.tablaSimbolos.clear();
     estado.cuadruplos.clear();
+    estado.historialPilas.clear();
+    estado.valoresTemporales.clear();
     estado.identificadoresPendientes.clear();
     estado.idDestinoAsignacion.clear();
     estado.tipoDestinoAsignacion = TipoDato::ERROR_SEMANTICO;

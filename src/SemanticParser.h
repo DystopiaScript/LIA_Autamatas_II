@@ -57,6 +57,12 @@ struct Simbolo {
     bool inicializada = false;
     bool esConstante = false;
     std::string valorConstante;
+    // Valor conocido durante la simulacion semantica. No representa memoria
+    // real: permite mostrar, por ejemplo, que resultado vale 30 despues de
+    // procesar `resultado = base + 20`. Si el dato depende de input, queda
+    // en false porque el compilador no conoce la entrada futura.
+    bool valorConocido = false;
+    std::string valorActual;
 };
 
 struct Cuadruplo {
@@ -64,6 +70,16 @@ struct Cuadruplo {
     std::string op1;
     std::string op2;
     std::string res;
+};
+
+struct HistorialPilas {
+    int paso = 0;
+    std::string accion;
+    std::vector<std::string> operandos;
+    std::vector<std::string> tipos;
+    std::vector<std::string> operadores;
+    std::vector<std::string> avail;
+    std::vector<int> saltos;
 };
 
 struct EstadoSemantico {
@@ -90,6 +106,15 @@ struct EstadoSemantico {
     // CONT: dirección del siguiente cuádruplo. El material inicia en 1.
     int CONT = 1;
     std::vector<Cuadruplo> cuadruplos;
+    std::vector<HistorialPilas> historialPilas;
+
+    // Mapa auxiliar para propagar valores conocidos entre cuadruplos:
+    //
+    //     10 + 20 -> $T1 -> resultado
+    //
+    // No reemplaza a la memoria virtual. Solo permite presentar en la
+    // interfaz los resultados que se pueden deducir sin ejecutar el programa.
+    std::map<std::string, std::string> valoresTemporales;
 
     // Contador de direcciones logicas de la RAM virtual del programa.
     // Comienza en cero para que la primera variable ocupe VRAM[0].
@@ -292,7 +317,7 @@ std::string obtenerResultado(
 /**
  * Finaliza una asignación usando el resultado que está en las pilas.
  *
- * Esta operación no apila '=' ni ':=' en POper. Primero valida el tipo del
+ * Esta operación no apila '=' en POper. Primero valida el tipo del
  * resultado, después consume exactamente un elemento de PilaO y PTipos y
  * finalmente genera el cuádruplo de asignación.
  */
@@ -320,7 +345,9 @@ int generarEntrada(
     const std::string& id
 );
 
-/** Genera el cuádruplo output para el resultado de una expresión. */
+/**
+ * Genera `(output, _, _, resultado)` para el resultado de una expresión.
+ */
 int generarSalida(
     EstadoSemantico& estado,
     const std::string& resultadoExpresion
@@ -336,6 +363,12 @@ int generarSalida(
  * son distintas.
  */
 namespace GeneracionCodigo {
+
+/** Guarda una fotografia de las cuatro pilas despues de una accion. */
+void registrarEstadoPilas(
+    EstadoSemantico& estado,
+    const std::string& accion
+);
 
 /** Coloca un operando textual en PilaO. */
 void apilarOperando(

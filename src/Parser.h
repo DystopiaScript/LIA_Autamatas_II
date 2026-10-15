@@ -45,7 +45,9 @@
 // ========== CONSTANTES DE DIMENSIONES ==========
 const int NUM_NO_TERMINALES = 29;   // Filas de la matriz predictiva
 const int NUM_TERMINALES    = 45;   // Columnas de la matriz predictiva (44 terminales + $)
-const int NUM_PRODUCCIONES  = 66;   // Producciones de la gramática LIA
+// La produccion 67 corresponde a:
+//     DECLARA -> const id : TIPO = FACT ; DECLARA
+const int NUM_PRODUCCIONES  = 67;   // Producciones de la gramática LIA
 const int MAX_LADO_DERECHO  = 8;    // La producción más larga tiene 8 símbolos (1 y 21)
 
 // ========== CÓDIGOS DE NO TERMINALES (1-29) ==========
@@ -108,7 +110,8 @@ enum PalabraReservada {
     PR_LOOP    = 212,
     PR_BREAK   = 213,
     PR_INPUT   = 214,
-    PR_OUTPUT  = 215
+    PR_OUTPUT  = 215,
+    PR_CONST   = 216
 };
 
 // Código del fin de entrada (token virtual que se procesa al agotar los tokens)
@@ -152,9 +155,17 @@ private:
     std::vector<std::string> erroresSemanticos;
     bool semanticaCorrecta;                 // Resultado de la fase semantica
     bool declaracionActiva;                 // Se esta procesando una declaracion
+    // Durante `const PI : real = 3.1416`, estos campos conservan los datos
+    // entre distintos match del driver LL(1). La constante se registra al
+    // reconocer el punto y coma, cuando ya se tienen sus cuatro partes.
+    bool constanteActiva;
     bool asignacionActiva;                 // Se esta procesando una asignacion
-    bool entradaPorIdentificadorActiva;    // output(id, id, ...) segun gramatica
+    bool entradaPorIdentificadorActiva;    // input(id, id, ...) segun gramatica
     int parentesisDeExpresionAbiertos;     // Control de FACT -> ( EXPR )
+    std::string idConstantePendiente;
+    Semantica::TipoDato tipoConstantePendiente =
+        Semantica::TipoDato::ERROR_SEMANTICO;
+    std::string valorConstantePendiente;
 
     // ========== MATRIZ PREDICTIVA M[X, a] ==========
     /**
@@ -165,7 +176,7 @@ private:
      *
      * Orden de columnas (0-44):
      *  id cteentera ctereal ctenotacion ctecaracter ctestring class def int
-     *  float char bool string if else while do dowhile loop break input output
+     *  float/real char bool string if else while do dowhile loop break input output
      *  ( ) { } : ; , = ! || && == != < <= > >= + - * / % $
      */
     static const int MATRIZ_PREDICTIVA[NUM_NO_TERMINALES][NUM_TERMINALES];
@@ -320,7 +331,7 @@ private:
     /**
      * @brief Construye la lista de terminales esperados para un no terminal
      * @param codigoNoTerminal Código del no terminal (1-29)
-     * @return String tipo "int, float, char, bool, string"
+     * @return Tipos aceptados: "int, float/real, char, bool, string"
      *
      * Recorre la fila del no terminal en la matriz predictiva y junta los
      * nombres de las columnas cuya celda != -1. Así los mensajes de error

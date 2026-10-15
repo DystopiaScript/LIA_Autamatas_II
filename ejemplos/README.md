@@ -10,15 +10,20 @@ Lexer -> Parser LL(1) -> acciones semánticas -> cuádruplos
 
 - `01_basico_semantico.lia`: declaraciones, suma y asignaciones.
 - `02_precedencia_parentesis.lia`: `+`, `*`, `%` y paréntesis.
-- `03_entrada_salida.lia`: `input` con expresiones y `output` con identificadores.
+- `03_entrada_salida.lia`: `input` con identificadores y `output` con expresiones.
+- `07_programa_completo.lia`: declaraciones, constantes, expresiones, input y output.
+- `06_constantes.lia`: declaraciones con `const id : tipo = literal`.
 - `05_relacionales_y_logicos.lia`: `<`, `>=`, `==`, `!=`, `&&`, `||` y `!`.
+- `08_operadores_relacionales.lia`: ejemplo de `>`, `<`, `>=`, `<=`, `==` y
+  `!=`, con todos los identificadores declarados.
 
 ## Caso con errores
 
 - `04_errores_semanticos.lia`: debe pasar la sintaxis, pero reportar:
-  - identificador no declarado;
   - incompatibilidad de asignación;
   - `%` aplicado a un `REAL`.
+  Todos los identificadores usados están declarados para que el ejemplo se
+  concentre en esos errores.
 
 ## Cómo probarlos
 
@@ -41,9 +46,31 @@ reconocida por el lexer actual.
 La gramática actual del proyecto define:
 
 ```text
-input  ( EXPR, ... ) ;
-output ( id, id, ... ) ;
+input  ( id, id, ... ) ;
+output ( EXPR, ... ) ;
 ```
 
-Por eso `03_entrada_salida.lia` conserva ese orden, aunque los nombres
-internos `EST_WRITE` y `EST_READ` puedan parecer invertidos.
+Estas formas corresponden a los estatutos convencionales: `input` recibe
+variables que serán destinos de datos y `output` recibe expresiones que se
+mostrarán.
+
+En los cuádruplos, `output` coloca la expresión que se mostrará en
+`RESULTADO`, por ejemplo:
+
+```text
+(output, _, _, $T2)
+```
+
+La declaración de constantes integrada utiliza:
+
+```text
+const PI : real = 3.1416;
+```
+
+El lenguaje acepta `real` como alias de `float`; ambos representan el tipo
+semántico REAL. Los programas existentes que usan `float` siguen siendo
+válidos.
+
+En esta primera versión, el valor debe ser un literal compatible con el tipo.
+Las constantes inicializadas mediante expresiones completas quedan para una
+ampliación posterior de la gramática.

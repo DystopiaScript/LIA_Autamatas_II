@@ -291,7 +291,9 @@ std::size_t SemanticAnalysis::procesarExpresion(
 
 TipoDato SemanticAnalysis::tipoDesdeLexema(const std::string& lexema) {
     if (lexema == "int") return TipoDato::ENTERO;
-    if (lexema == "float") return TipoDato::REAL;
+    if (lexema == "float" || lexema == "real") {
+        return TipoDato::REAL;
+    }
     if (lexema == "char") return TipoDato::CARACTER;
     if (lexema == "bool") return TipoDato::BOOLEANO;
     if (lexema == "string") return TipoDato::CADENA;

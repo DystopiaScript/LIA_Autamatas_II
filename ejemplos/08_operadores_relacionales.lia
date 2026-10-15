@@ -1,0 +1,29 @@
+$ ============================================================
+$ 08_operadores_relacionales.lia
+$ Ejemplo de todos los operadores relacionales de LIA.
+$ ============================================================
+
+class ( Relacionales ) {
+
+def a, b : int ;
+def mayor, menor, mayorIgual : bool ;
+def menorIgual, igual, diferente : bool ;
+
+a = 10 ;
+b = 20 ;
+
+mayor = a > b ;
+menor = a < b ;
+mayorIgual = a >= b ;
+menorIgual = a <= b ;
+igual = a == b ;
+diferente = a != b ;
+
+output ( mayor ) ;
+output ( menor ) ;
+output ( mayorIgual ) ;
+output ( menorIgual ) ;
+output ( igual ) ;
+output ( diferente ) ;
+
+}

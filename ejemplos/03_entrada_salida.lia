@@ -1,11 +1,10 @@
 $ ============================================================
 $ 03_entrada_salida.lia
-$ Caso valido segun la gramatica actual del proyecto:
-$   input  recibe expresiones.
-$   output recibe una lista de identificadores.
+$ Caso valido de entrada y salida:
+$   input  recibe identificadores destino.
+$   output recibe una expresion.
 $
-$ Aunque los nombres EST_WRITE y EST_READ puedan parecer invertidos,
-$ se conserva exactamente la produccion actual del parser.
+$ La lista de identificadores de input se escribe separada por comas.
 $ ============================================================
 
 class ( EntradaSalida ) {
@@ -14,7 +13,8 @@ def x : int ;
 def y : int ;
 
 input ( x ) ;
-input ( x + 10 , x * 2 ) ;
-output ( x , y ) ;
+input ( x, y ) ;
+output ( x + 10 ) ;
+output ( x * y ) ;
 
 }

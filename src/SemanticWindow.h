@@ -12,7 +12,6 @@
  * - tabla de simbolos;
  * - pilas de trabajo;
  * - cuadruplos;
- * - tablas de verdad;
  * - errores semanticos.
  */
 
@@ -44,12 +43,16 @@ private:
     QTableWidget* crearTablaSimbolos(
         const SemanticAnalysisResult& resultado
     );
+    QTableWidget* crearTablaConstantes(
+        const SemanticAnalysisResult& resultado
+    );
+    QWidget* crearTablasPilas(
+        const SemanticAnalysisResult& resultado
+    );
     QTableWidget* crearTablaCuadruplos(
         const SemanticAnalysisResult& resultado
     );
 
-    // Tablas didacticas que muestran la logica de &&, || y !.
-    QWidget* crearTablasVerdad();
 };
 
 #endif // SEMANTIC_WINDOW_H

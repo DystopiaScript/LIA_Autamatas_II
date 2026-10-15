@@ -40,6 +40,7 @@ const std::map<std::string, int> Lexer::PALABRAS_RESERVADAS = {
     {"endclass", 100},
     {"int", 100},
     {"float", 100},
+    {"real", 100},
     {"char", 100},
     {"string", 100},
     {"bool", 100},
@@ -50,6 +51,9 @@ const std::map<std::string, int> Lexer::PALABRAS_RESERVADAS = {
     {"input", 100},
     {"output", 100},
     {"def", 100},
+    // const se conserva con el mismo gramema que las demas reservadas. El
+    // parser la distingue por lexema y la convierte a PR_CONST.
+    {"const", 100},
     {"dowhile", 100},
     {"break", 100},
     {"loop", 100}
@@ -529,4 +533,3 @@ void Lexer::reset() {
     historialVisual.clear();
     erroresLexicos.clear();
 }
-

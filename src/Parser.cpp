@@ -21,8 +21,8 @@
  *
  * DATOS (ya verificados contra el diseño en Excel):
  *  - MATRIZ_PREDICTIVA  29x45
- *  - PRODUCCIONES       66x9 (longitud + hasta 8 símbolos)
- *  - RESERVADA_A_CODIGO (16 palabras reservadas de la gramática)
+ *  - PRODUCCIONES       67x9 (longitud + hasta 8 símbolos)
+ *  - RESERVADA_A_CODIGO (17 palabras reservadas de la gramática)
  *
  * El driver (función Analiza) implementa fielmente el algoritmo de manejo
  * de la matriz predictiva visto en clase (los 4 casos terminal/no terminal).
@@ -110,10 +110,10 @@ const int Parser::PRODUCCIONES[NUM_PRODUCCIONES][MAX_LADO_DERECHO + 1] = {
 /*25 EST_DO -> do ESTATUTOS dowhile ( EXPR ) ;     */ {7, 210,  5,211,119, 17,120,123,  0},
 /*26 EST_LOOP -> loop { ESTATUTOS }                */ {4, 212,129,  5,130,  0,  0,  0,  0},
 /*27 EST_BREAK -> break ;                          */ {2, 213,123,  0,  0,  0,  0,  0,  0},
-/*28 EST_WRITE -> input ( EXPR LEXPR ) ;           */ {6, 214,119, 17, 14,120,123,  0,  0},
+/*28 EST_WRITE -> output ( EXPR LEXPR ) ;          */ {6, 215,119, 17, 14,120,123,  0,  0},
 /*29 LEXPR -> , EXPR LEXPR                         */ {3, 124, 17, 14,  0,  0,  0,  0,  0},
 /*30 LEXPR -> epsilon                              */ {0,  -1,  0,  0,  0,  0,  0,  0,  0},
-/*31 EST_READ -> output ( id LIDR ) ;              */ {6, 215,119,101, 16,120,123,  0,  0},
+/*31 EST_READ -> input ( id LIDR ) ;               */ {6, 214,119,101, 16,120,123,  0,  0},
 /*32 LIDR -> , id LIDR                             */ {3, 124,101, 16,  0,  0,  0,  0,  0},
 /*33 LIDR -> epsilon                               */ {0,  -1,  0,  0,  0,  0,  0,  0,  0},
 /*34 EXPR -> EXPR2 EXPR'                           */ {2,  19, 18,  0,  0,  0,  0,  0,  0},
@@ -148,7 +148,11 @@ const int Parser::PRODUCCIONES[NUM_PRODUCCIONES][MAX_LADO_DERECHO + 1] = {
 /*63 FACT -> ctenotacion                           */ {1, 104,  0,  0,  0,  0,  0,  0,  0},
 /*64 FACT -> ctecaracter                           */ {1, 125,  0,  0,  0,  0,  0,  0,  0},
 /*65 FACT -> ctestring                             */ {1, 126,  0,  0,  0,  0,  0,  0,  0},
-/*66 FACT -> ( EXPR )                              */ {3, 119, 17,120,  0,  0,  0,  0,  0}
+/*66 FACT -> ( EXPR )                              */ {3, 119, 17,120,  0,  0,  0,  0,  0},
+// La constante se limita inicialmente a un FACT literal. La forma:
+//     const PI : real = 3.1416;
+// se registra cuando se hace match con ';'.
+/*67 DECLARA -> const id : TIPO = FACT ; DECLARA   */ {8, 216,101,131, 4,109, 29,123,  2}
 };
 
 // ============================================================================
@@ -159,6 +163,9 @@ const std::map<std::string, int> Parser::RESERVADA_A_CODIGO = {
     {"def",     PR_DEF},
     {"int",     PR_INT},
     {"float",   PR_FLOAT},
+    // `real` es un alias de `float`: ambos representan TipoDato::REAL y
+    // reutilizan la misma columna y producción de la gramática.
+    {"real",    PR_FLOAT},
     {"char",    PR_CHAR},
     {"bool",    PR_BOOL},
     {"string",  PR_STRING},
@@ -170,7 +177,10 @@ const std::map<std::string, int> Parser::RESERVADA_A_CODIGO = {
     {"loop",    PR_LOOP},
     {"break",   PR_BREAK},
     {"input",   PR_INPUT},
-    {"output",  PR_OUTPUT}
+    {"output",  PR_OUTPUT},
+    // const no se confunde con un identificador porque el lexer la entrega
+    // como palabra reservada y codigoDelToken la traduce a PR_CONST.
+    {"const",   PR_CONST}
     // Nota: "endclass" es reservada del lexer pero NO forma parte de la
     // gramática (el programa cierra con '}'), por eso no aparece aquí.
 };
@@ -182,6 +192,7 @@ Parser::Parser()
       sintaxisCorrecta(false),
       semanticaCorrecta(true),
       declaracionActiva(false),
+      constanteActiva(false),
       asignacionActiva(false),
       entradaPorIdentificadorActiva(false),
       parentesisDeExpresionAbiertos(0) {
@@ -280,6 +291,23 @@ bool Parser::Analiza() {
             // ================= X ES NO TERMINAL =================
             int col = columnaDe(a);
             int n = (col != -1) ? MATRIZ_PREDICTIVA[X - 1][col] : -1;
+            // La tabla original se conserva con sus 45 columnas. La nueva
+            // palabra reservada const se dirige explícitamente a la
+            // producción 67 para no desplazar las columnas existentes ni
+            // invalidar las producciones que ya estaban probadas.
+            if (X == NT_DECLARA && a == PR_CONST) {
+                n = 67;
+            }
+            // La gramática histórica tenía input/output intercambiados.
+            // Estas dos rutas conservan la matriz original sin desplazar
+            // columnas y seleccionan ahora los estatutos convencionales:
+            // output(EXPR, ...) e input(id, ...).
+            if (X == NT_EST_WRITE && a == PR_INPUT) {
+                n = 31;
+            }
+            if (X == NT_EST_READ && a == PR_OUTPUT) {
+                n = 28;
+            }
 
             if (n != -1) {
                 // Aplicar la producción n: sacar X e insertar su lado
@@ -358,9 +386,13 @@ void Parser::reset() {
     erroresSemanticos.clear();
     semanticaCorrecta = true;
     declaracionActiva = false;
+    constanteActiva = false;
     asignacionActiva = false;
     entradaPorIdentificadorActiva = false;
     parentesisDeExpresionAbiertos = 0;
+    idConstantePendiente.clear();
+    tipoConstantePendiente = Semantica::TipoDato::ERROR_SEMANTICO;
+    valorConstantePendiente.clear();
     // Vaciar la pila (std::stack no tiene clear())
     while (!pila.empty()) {
         pila.pop();
@@ -420,6 +452,18 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             declaracionActiva = true;
             break;
 
+        case 67: // DECLARA -> const id : TIPO = FACT ; DECLARA
+            // Se abre un contexto independiente. A diferencia de `def`, no
+            // se acumula una lista de ids: esta sintaxis declara una sola
+            // constante y exige que tenga un valor inicial.
+            constanteActiva = true;
+            declaracionActiva = false;
+            idConstantePendiente.clear();
+            tipoConstantePendiente =
+                TipoDato::ERROR_SEMANTICO;
+            valorConstantePendiente.clear();
+            break;
+
         case 20: // EST_ASIG -> id = EXPR ;
             // El token actual es el id destino porque la produccion se
             // selecciona antes de hacer match con dicho terminal.
@@ -430,9 +474,9 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             asignacionActiva = true;
             break;
 
-        case 28: // input ( EXPR LEXPR ) ;
-            // La gramatica actual define input con expresiones. Cada
-            // expresion se convierte en un cuadruplo de salida al terminar.
+        case 28: // output ( EXPR LEXPR ) ;
+            // Cada expresion se convierte en un cuadruplo de salida al
+            // terminar la expresion.
             break;
 
         case 29: // LEXPR -> , EXPR LEXPR
@@ -448,7 +492,7 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             break;
 
         case 30: // LEXPR -> epsilon
-            // Cierra la ultima expresion de input antes de ')'.
+            // Cierra la ultima expresion de output antes de ')'.
             if (!estadoSemantico.PilaO.empty()) {
                 const std::string resultado =
                     Expresiones::obtenerResultado(estadoSemantico);
@@ -459,8 +503,9 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             }
             break;
 
-        case 31: // output ( id LIDR ) ;
-            // En la gramatica existente output recibe identificadores.
+        case 31: // input ( id LIDR ) ;
+            // Cada identificador de la lista se convierte en un cuadruplo
+            // input y se marca como valor desconocido.
             entradaPorIdentificadorActiva = true;
             break;
 
@@ -506,6 +551,12 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             );
             break;
         case 61: // FACT -> cteentera
+            if (constanteActiva) {
+                // Durante una constante el literal no va a PilaO: se guarda
+                // como valor pendiente para declararConstante().
+                valorConstantePendiente = tokenActual.lexema;
+                break;
+            }
             Expresiones::apilarConstante(
                 estadoSemantico,
                 tokenActual.lexema,
@@ -514,6 +565,12 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             break;
         case 62: // FACT -> ctereal
         case 63: // FACT -> ctenotacion
+            if (constanteActiva) {
+                // Las dos formas representan un valor REAL: decimal o
+                // notacion cientifica.
+                valorConstantePendiente = tokenActual.lexema;
+                break;
+            }
             Expresiones::apilarConstante(
                 estadoSemantico,
                 tokenActual.lexema,
@@ -521,6 +578,12 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             );
             break;
         case 64: // FACT -> ctecaracter
+            if (constanteActiva) {
+                // Se conserva el lexema completo, incluidas las comillas,
+                // para que la validacion semantica pueda revisarlo.
+                valorConstantePendiente = tokenActual.lexema;
+                break;
+            }
             Expresiones::apilarConstante(
                 estadoSemantico,
                 tokenActual.lexema,
@@ -528,6 +591,11 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             );
             break;
         case 65: // FACT -> ctestring
+            if (constanteActiva) {
+                // La cadena tambien se conserva textual para la tabla visual.
+                valorConstantePendiente = tokenActual.lexema;
+                break;
+            }
             Expresiones::apilarConstante(
                 estadoSemantico,
                 tokenActual.lexema,
@@ -572,8 +640,12 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
 void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
     using namespace Semantica;
 
-    // El identificador de una declaracion se acumula antes de conocer el tipo.
-    if (declaracionActiva && terminalEsperado == IDENTIFICADOR) {
+    // El identificador de una declaracion de variable se acumula antes de
+    // conocer el tipo. Para una constante se conserva por separado porque su
+    // produccion no utiliza LID.
+    if (constanteActiva && terminalEsperado == IDENTIFICADOR) {
+        idConstantePendiente = tokenActual.lexema;
+    } else if (declaracionActiva && terminalEsperado == IDENTIFICADOR) {
         Declaraciones::acumularIdentificador(
             estadoSemantico,
             tokenActual.lexema
@@ -595,11 +667,23 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
         if (terminalEsperado == PR_BOOL) tipo = TipoDato::BOOLEANO;
         if (terminalEsperado == PR_STRING) tipo = TipoDato::CADENA;
         Declaraciones::declararVariables(estadoSemantico, tipo);
+    } else if (constanteActiva &&
+               (terminalEsperado == PR_INT ||
+                terminalEsperado == PR_FLOAT ||
+                terminalEsperado == PR_CHAR ||
+                terminalEsperado == PR_BOOL ||
+                terminalEsperado == PR_STRING)) {
+        // En una constante el tipo se guarda, pero el registro se retrasa
+        // hasta ';' para que tambien exista el literal inicial.
+        if (terminalEsperado == PR_INT) tipoConstantePendiente = TipoDato::ENTERO;
+        if (terminalEsperado == PR_FLOAT) tipoConstantePendiente = TipoDato::REAL;
+        if (terminalEsperado == PR_CHAR) tipoConstantePendiente = TipoDato::CARACTER;
+        if (terminalEsperado == PR_BOOL) tipoConstantePendiente = TipoDato::BOOLEANO;
+        if (terminalEsperado == PR_STRING) tipoConstantePendiente = TipoDato::CADENA;
     }
 
-    // La gramatica actual llama EST_READ a la produccion output(id,...).
-    // Semantica::generarEntrada conserva el nombre conceptual de input,
-    // pero aqui se respeta la produccion real del proyecto.
+    // EST_READ representa input(id, ...). Cada identificador reconocido
+    // genera su cuadruplo de entrada.
     if (entradaPorIdentificadorActiva &&
         terminalEsperado == IDENTIFICADOR) {
         EntradaSalida::generarEntrada(
@@ -624,6 +708,21 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
 
     if (declaracionActiva && terminalEsperado == PUNTO_COMA) {
         declaracionActiva = false;
+    }
+    if (constanteActiva && terminalEsperado == PUNTO_COMA) {
+        // Este es el punto de commit de la declaracion: todos los datos ya
+        // fueron reconocidos y declararConstante valida tipo, redeclaracion
+        // y valor antes de insertar el simbolo.
+        Declaraciones::declararConstante(
+            estadoSemantico,
+            idConstantePendiente,
+            tipoConstantePendiente,
+            valorConstantePendiente
+        );
+        constanteActiva = false;
+        idConstantePendiente.clear();
+        valorConstantePendiente.clear();
+        tipoConstantePendiente = TipoDato::ERROR_SEMANTICO;
     }
 
     if (entradaPorIdentificadorActiva && terminalEsperado == PUNTO_COMA) {
@@ -827,6 +926,7 @@ std::string Parser::nombreSimbolo(int codigo) const {
         case PR_BREAK:   return "break";
         case PR_INPUT:   return "input";
         case PR_OUTPUT:  return "output";
+        case PR_CONST:   return "const";
         // --- terminales: delimitadores y operadores ---
         case 119: return "(";
         case 120: return ")";

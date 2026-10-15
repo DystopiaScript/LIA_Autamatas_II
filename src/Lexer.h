@@ -115,7 +115,7 @@ private:
      * - Value: gramema (siempre 100 para palabras reservadas)
      * 
      * TODO: Llenar con las 17 palabras reservadas de LIA:
-     * class, endclass, int, float, char, string, bool,
+     * class, endclass, int, float, real, char, string, bool,
      * if, else, do, while, input, output, def, to, break, loop
      */
     static const std::map<std::string, int> PALABRAS_RESERVADAS;
