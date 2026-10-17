@@ -1,0 +1,36 @@
+$ ============================================================
+$ 09_negaciones.lia
+$ Ejemplo de negacion logica y negacion de comparaciones.
+$ Todos los identificadores utilizados estan declarados.
+$ ============================================================
+
+class ( Negaciones ) {
+
+def activo, bloqueado : bool ;
+def a, b : int ;
+def mayor, noMayor : bool ;
+def igualdad, noIgualdad : bool ;
+def resultado : bool ;
+
+a = 10 ;
+b = 20 ;
+activo = true ;
+bloqueado = ! activo ;
+
+mayor = a > b ;
+noMayor = ! ( a > b ) ;
+
+igualdad = a == b ;
+noIgualdad = ! igualdad ;
+
+resultado = ! ( a < b && activo ) ;
+
+output ( activo ) ;
+output ( bloqueado ) ;
+output ( mayor ) ;
+output ( noMayor ) ;
+output ( igualdad ) ;
+output ( noIgualdad ) ;
+output ( resultado ) ;
+
+}

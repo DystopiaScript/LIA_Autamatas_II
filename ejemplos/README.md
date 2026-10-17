@@ -16,6 +16,8 @@ Lexer -> Parser LL(1) -> acciones semánticas -> cuádruplos
 - `05_relacionales_y_logicos.lia`: `<`, `>=`, `==`, `!=`, `&&`, `||` y `!`.
 - `08_operadores_relacionales.lia`: ejemplo de `>`, `<`, `>=`, `<=`, `==` y
   `!=`, con todos los identificadores declarados.
+- `09_negaciones.lia`: negación lógica `!` aplicada a variables booleanas y a
+  expresiones relacionales/lógicas.
 
 ## Caso con errores
 
