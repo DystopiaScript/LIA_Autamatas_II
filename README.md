@@ -1,6 +1,7 @@
 # Analizador LIA: lexer, parser y semántica
 
-Proyecto académico de **Lenguajes y Autómatas II** desarrollado en C++ con
+Proyecto académico de la materia **Lenguajes y Autómatas II (Autómatas II)**,
+desarrollado en C++ con
 Qt Widgets y CMake. La aplicación permite escribir o abrir un programa
 `.lia`, visualizar sus tokens, ejecutar el parser predictivo LL(1) y revisar
 el análisis semántico junto con el código intermedio generado.
@@ -313,6 +314,8 @@ Algunos casos importantes:
 - `08_operadores_relacionales.lia`: operadores relacionales.
 - `09_negaciones.lia`: prueba de negaciones; actualmente debe considerarse
   un ejemplo de diagnóstico porque usa `true`, que aún no es literal válido.
+- `10_unarios_logicos.lia`: negación numérica, negación lógica, `&&` y `||`;
+  todos sus identificadores están declarados y debe ser un caso válido.
 
 ## Compilación en Windows
 
@@ -373,7 +376,11 @@ implementación semántica.
 ## Autores
 
 - Jasher Abraham Carrazco Vaquera
-- Juan Pablo Casio Martos
+- Luis Guillermo Meléndez Mier
+
+Jasher Abraham Carrazco Vaquera y Luis Guillermo Meléndez Mier trabajan
+actualmente en esta segunda parte del analizador semántico para la materia de
+Autómatas II.
 
 ## Licencia
 

@@ -18,6 +18,9 @@ Lexer -> Parser LL(1) -> acciones semánticas -> cuádruplos
   `!=`, con todos los identificadores declarados.
 - `09_negaciones.lia`: negación lógica `!` aplicada a variables booleanas y a
   expresiones relacionales/lógicas.
+- `10_unarios_logicos.lia`: negación numérica `-`, negación lógica `!`, `&&`
+  y `||`, sin utilizar todavía los literales `true` y `false`. Todos sus
+  identificadores están declarados y debe ser un caso válido.
 
 ## Caso con errores
 

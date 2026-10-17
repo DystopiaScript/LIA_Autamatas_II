@@ -45,9 +45,10 @@
 // ========== CONSTANTES DE DIMENSIONES ==========
 const int NUM_NO_TERMINALES = 29;   // Filas de la matriz predictiva
 const int NUM_TERMINALES    = 45;   // Columnas de la matriz predictiva (44 terminales + $)
-// La produccion 67 corresponde a:
+// Las producciones 67 y 68 corresponden a:
 //     DECLARA -> const id : TIPO = FACT ; DECLARA
-const int NUM_PRODUCCIONES  = 67;   // Producciones de la gramática LIA
+//     EXPR3 -> - EXPR4
+const int NUM_PRODUCCIONES  = 68;   // Producciones de la gramática LIA
 const int MAX_LADO_DERECHO  = 8;    // La producción más larga tiene 8 símbolos (1 y 21)
 
 // ========== CÓDIGOS DE NO TERMINALES (1-29) ==========
@@ -170,7 +171,7 @@ private:
     // ========== MATRIZ PREDICTIVA M[X, a] ==========
     /**
      * 29 filas (no terminales) x 45 columnas (terminales + $).
-     * Valor = número de producción a aplicar (1-66), o -1 = error.
+     * Valor = número de producción a aplicar (1-68), o -1 = error.
      *
      * Indexado: MATRIZ_PREDICTIVA[codigoNoTerminal - 1][columnaDe(codigoTerminal)]
      *
@@ -183,7 +184,7 @@ private:
 
     // ========== MATRIZ DE PRODUCCIONES ==========
     /**
-     * 66 filas (una por producción) x 9 columnas:
+     * 68 filas (una por producción) x 9 columnas:
      *  - Columna 0: LONGITUD del lado derecho (0 = producción épsilon)
      *  - Columnas 1..8: los códigos de los símbolos del lado derecho, en orden
      *

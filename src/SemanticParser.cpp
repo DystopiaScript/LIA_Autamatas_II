@@ -761,6 +761,27 @@ std::string calcularValor(
 ) {
     // Esta evaluacion es una ayuda de visualizacion y propagacion semantica.
     // El cuadruplo siempre se genera aunque no sea posible calcular su valor.
+    const bool operandosBooleanos =
+        (op1 == "true" || op1 == "false") &&
+        (op2 == "true" || op2 == "false");
+    if (operandosBooleanos) {
+        const bool valor1 = op1 == "true";
+        const bool valor2 = op2 == "true";
+
+        if (operador == "&&" || operador == "and") {
+            return (valor1 && valor2) ? "true" : "false";
+        }
+        if (operador == "||" || operador == "or") {
+            return (valor1 || valor2) ? "true" : "false";
+        }
+        if (operador == "==" || operador == "!=") {
+            const bool iguales = valor1 == valor2;
+            return (operador == "==" ? iguales : !iguales)
+                ? "true"
+                : "false";
+        }
+    }
+
     const bool esEntero =
         op1.find('.') == std::string::npos &&
         op2.find('.') == std::string::npos;

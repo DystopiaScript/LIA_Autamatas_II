@@ -1,0 +1,44 @@
+$ ============================================================
+$ 10_unarios_logicos.lia
+$ Operadores unarios y logicos:
+$   -  negacion numerica
+$   !  negacion logica
+$   && AND logico
+$   || OR logico
+$ Todos los identificadores utilizados estan declarados.
+$ Resultado esperado:
+$   positivo = 8
+$   negativo = -8
+$   suma = -5
+$   limite = verdadero, diferente = verdadero
+$   andResultado = verdadero, orResultado = verdadero
+$   notResultado = falso
+$ ============================================================
+
+class ( UnariosLogicos ) {
+
+def positivo, negativo, suma : int ;
+def limite, diferente : bool ;
+def andResultado, orResultado, notResultado : bool ;
+
+positivo = 8 ;
+negativo = - positivo ;
+suma = negativo + 3 ;
+
+limite = positivo > 0 ;
+diferente = positivo != negativo ;
+
+andResultado = limite && diferente ;
+orResultado = limite || diferente ;
+notResultado = ! limite ;
+
+output ( positivo ) ;
+output ( negativo ) ;
+output ( suma ) ;
+output ( limite ) ;
+output ( diferente ) ;
+output ( andResultado ) ;
+output ( orResultado ) ;
+output ( notResultado ) ;
+
+}
