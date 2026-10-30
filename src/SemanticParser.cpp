@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -27,6 +28,23 @@ namespace Semantica {
 // ============================================================================
 
 namespace {
+
+std::string claveVariableRAM(int direccionRAM) {
+    return "@VRAM[" + std::to_string(direccionRAM) + "]";
+}
+
+std::string operandoVisible(const std::string& operando) {
+    const std::string prefijo = "@VRAM[";
+    if (operando.size() > prefijo.size() &&
+        operando.compare(0, prefijo.size(), prefijo) == 0 &&
+        operando.back() == ']') {
+        return operando.substr(
+            prefijo.size(),
+            operando.size() - prefijo.size() - 1
+        );
+    }
+    return operando;
+}
 
 // ============================================================================
 // UTILIDADES INTERNAS
@@ -475,14 +493,14 @@ void apilarIdentificador(
     } else {
         GeneracionCodigo::apilarOperando(
             estado,
-            std::to_string(simbolo.direccionRAM)
+            claveVariableRAM(simbolo.direccionRAM)
         );
     }
     if (simbolo.valorConocido) {
         estado.valoresTemporales[
             simbolo.esConstante
                 ? simbolo.valorConstante
-                : std::to_string(simbolo.direccionRAM)
+                : claveVariableRAM(simbolo.direccionRAM)
         ] = simbolo.valorActual;
     }
     VerificacionSemantica::apilarTipo(estado, simbolo.tipo);
@@ -942,7 +960,12 @@ int generarCuadruplo(
     const std::string& resultado
 ) {
     const int indice = estado.CONT++;
-    estado.cuadruplos.push_back({operador, op1, op2, resultado});
+    estado.cuadruplos.push_back({
+        operador,
+        operandoVisible(op1),
+        operandoVisible(op2),
+        operandoVisible(resultado)
+    });
     return indice;
 }
 
@@ -1051,7 +1074,7 @@ void generarAsignacion(
     destino.valorActual = valor;
     if (destino.valorConocido) {
         estado.valoresTemporales[
-            std::to_string(destino.direccionRAM)
+            claveVariableRAM(destino.direccionRAM)
         ] = valor;
     }
     registrarEstadoPilas(
@@ -1088,6 +1111,68 @@ namespace ControlFlujo {
 // backpatching completa posteriormente el campo RES con la instruccion real.
 // --------------------------------------------------------------------------
 
+void iniciarIf(EstadoSemantico& estado) {
+    if (estado.PilaO.empty() || estado.PTipos.empty()) {
+        throw std::logic_error(
+            "[SALTOS] Falta la condicion del IF"
+        );
+    }
+
+    const TipoDato tipoCondicion = estado.PTipos.top();
+    if (tipoCondicion != TipoDato::BOOLEANO) {
+        throw std::logic_error(
+            "[SEMANTICA] La condicion del IF debe ser de tipo BOOLEANO"
+        );
+    }
+
+    estado.PTipos.pop();
+    const std::string condicion = estado.PilaO.top();
+    estado.PilaO.pop();
+    const int salto = generarSalto(estado, "gotofalso", condicion);
+    GeneracionCodigo::liberarTemporalAvail(estado, condicion);
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "IF: gotofalso " + condicion +
+        " pendiente en " + std::to_string(salto)
+    );
+}
+
+void iniciarElse(EstadoSemantico& estado) {
+    if (estado.PSaltos.empty()) {
+        throw std::logic_error(
+            "[SALTOS] No existe un gotofalso pendiente para ELSE"
+        );
+    }
+
+    const int saltoFalso = estado.PSaltos.top();
+    estado.PSaltos.pop();
+    const int saltoFin = generarSalto(estado, "goto", "_");
+    completarSalto(estado, saltoFalso, estado.CONT);
+    estado.PSaltos.push(saltoFin);
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "ELSE: gotofalso -> " + std::to_string(estado.CONT) +
+        ", goto pendiente en " + std::to_string(saltoFin)
+    );
+}
+
+void finalizarIf(EstadoSemantico& estado) {
+    if (estado.PSaltos.empty()) {
+        throw std::logic_error(
+            "[SALTOS] No existe un salto pendiente al finalizar IF"
+        );
+    }
+
+    const int salto = estado.PSaltos.top();
+    estado.PSaltos.pop();
+    completarSalto(estado, salto, estado.CONT);
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "IF: salto " + std::to_string(salto) +
+        " -> " + std::to_string(estado.CONT)
+    );
+}
+
 int generarSalto(
     EstadoSemantico& estado,
     const std::string& operador,
@@ -1109,13 +1194,14 @@ void completarSalto(
     int indiceCuadruplo,
     int destino
 ) {
-    if (indiceCuadruplo < 0 ||
-        indiceCuadruplo >= static_cast<int>(estado.cuadruplos.size())) {
+    if (indiceCuadruplo < 1 ||
+        indiceCuadruplo > static_cast<int>(estado.cuadruplos.size())) {
         throw std::out_of_range(
             "[SALTOS] Indice de cuadruplo invalido durante backpatching"
         );
     }
-    estado.cuadruplos[indiceCuadruplo].res = std::to_string(destino);
+    estado.cuadruplos[indiceCuadruplo - 1].res =
+        std::to_string(destino);
 }
 
 } // namespace ControlFlujo

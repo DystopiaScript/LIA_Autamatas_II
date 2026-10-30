@@ -49,7 +49,7 @@ const int NUM_TERMINALES    = 45;   // Columnas de la matriz predictiva (44 term
 //     DECLARA -> const id : TIPO = FACT ; DECLARA
 //     EXPR3 -> - EXPR4
 const int NUM_PRODUCCIONES  = 68;   // Producciones de la gramática LIA
-const int MAX_LADO_DERECHO  = 8;    // La producción más larga tiene 8 símbolos (1 y 21)
+const int MAX_LADO_DERECHO  = 9;    // IF-THEN-ELSE puede tener 9 símbolos
 
 // ========== CÓDIGOS DE NO TERMINALES (1-29) ==========
 /**
@@ -112,7 +112,8 @@ enum PalabraReservada {
     PR_BREAK   = 213,
     PR_INPUT   = 214,
     PR_OUTPUT  = 215,
-    PR_CONST   = 216
+    PR_CONST   = 216,
+    PR_THEN    = 217
 };
 
 // Código del fin de entrada (token virtual que se procesa al agotar los tokens)
@@ -162,6 +163,8 @@ private:
     bool constanteActiva;
     bool asignacionActiva;                 // Se esta procesando una asignacion
     bool entradaPorIdentificadorActiva;    // input(id, id, ...) segun gramatica
+    bool condicionIfPendiente;             // Se espera cerrar la condicion de if
+    bool elseIfPendiente;                  // Se espera cerrar el bloque ELSE
     int parentesisDeExpresionAbiertos;     // Control de FACT -> ( EXPR )
     std::string idConstantePendiente;
     Semantica::TipoDato tipoConstantePendiente =

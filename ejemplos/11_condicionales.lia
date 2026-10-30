@@ -1,0 +1,40 @@
+$ ============================================================
+$ 11_condicionales.lia
+$ Estatutos IF-THEN e IF-THEN-ELSE.
+$
+$ En LIA, el bloque THEN siempre se escribe entre llaves:
+$   if ( condicion ) then { estatutos }
+$
+$ Cuando existe ELSE, pertenece al mismo bloque del IF:
+$   if ( condicion ) then { estatutos else estatutos }
+$
+$ Resultado esperado:
+$   edad = 20
+$   se ejecuta el primer IF porque edad >= 18
+$   no se cumple edad < 18, por lo que se ejecuta el ELSE
+$   resultado = 0 al final
+$ ============================================================
+
+class ( Condicionales ) {
+
+def edad, resultado : int ;
+
+edad = 18 ;
+resultado = 0 ;
+
+$ IF-THEN
+if ( edad == 18 ) then {
+resultado = 1 ;
+}
+
+$ IF-THEN-ELSE
+if ( edad < 18 ) then {
+resultado = 100 ;
+else
+resultado = 0 ;
+}
+
+output ( edad ) ;
+output ( resultado ) ;
+
+}

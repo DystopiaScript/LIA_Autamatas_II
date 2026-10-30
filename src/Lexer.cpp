@@ -45,6 +45,7 @@ const std::map<std::string, int> Lexer::PALABRAS_RESERVADAS = {
     {"string", 100},
     {"bool", 100},
     {"if", 100},
+    {"then", 100},
     {"else", 100},
     {"do", 100},
     {"while", 100},

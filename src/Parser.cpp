@@ -21,7 +21,7 @@
  *
  * DATOS (ya verificados contra el diseño en Excel):
  *  - MATRIZ_PREDICTIVA  29x45
- *  - PRODUCCIONES       67x9 (longitud + hasta 8 símbolos)
+ *  - PRODUCCIONES       68x10 (longitud + hasta 9 símbolos)
  *  - RESERVADA_A_CODIGO (17 palabras reservadas de la gramática)
  *
  * El driver (función Analiza) implementa fielmente el algoritmo de manejo
@@ -77,9 +77,9 @@ const int Parser::MATRIZ_PREDICTIVA[NUM_NO_TERMINALES][NUM_TERMINALES] = {
 };
 
 // ============================================================================
-// MATRIZ DE PRODUCCIONES   (68 producciones x [longitud + 8 símbolos])
+// MATRIZ DE PRODUCCIONES   (68 producciones x [longitud + 9 símbolos])
 // Columna 0 = longitud del lado derecho (0 = épsilon)
-// Columnas 1..8 = códigos de los símbolos EN ORDEN DE LECTURA
+// Columnas 1..9 = códigos de los símbolos EN ORDEN DE LECTURA
 // El driver los inserta a la pila EN ORDEN INVERSO (del último al primero)
 // ============================================================================
 const int Parser::PRODUCCIONES[NUM_PRODUCCIONES][MAX_LADO_DERECHO + 1] = {
@@ -103,7 +103,7 @@ const int Parser::PRODUCCIONES[NUM_PRODUCCIONES][MAX_LADO_DERECHO + 1] = {
 /*18 ESTATUTOS -> EST_BREAK ESTATUTOS              */ {2,  12,  5,  0,  0,  0,  0,  0,  0},
 /*19 ESTATUTOS -> epsilon                          */ {0,  -1,  0,  0,  0,  0,  0,  0,  0},
 /*20 EST_ASIG -> id = EXPR ;                       */ {4, 101,109, 17,123,  0,  0,  0,  0},
-/*21 EST_IF -> if ( EXPR ) { ESTATUTOS SINO }      */ {8, 207,119, 17,120,129,  5,  8,130},
+/*21 EST_IF -> if ( EXPR ) then { ESTATUTOS SINO }  */ {9, 207,119, 17,120,217,129,  5,  8,130},
 /*22 SINO -> else ESTATUTOS                        */ {2, 208,  5,  0,  0,  0,  0,  0,  0},
 /*23 SINO -> epsilon                               */ {0,  -1,  0,  0,  0,  0,  0,  0,  0},
 /*24 EST_WHILE -> while ( EXPR ) { ESTATUTOS }     */ {7, 209,119, 17,120,129,  5,130,  0},
@@ -171,6 +171,7 @@ const std::map<std::string, int> Parser::RESERVADA_A_CODIGO = {
     {"bool",    PR_BOOL},
     {"string",  PR_STRING},
     {"if",      PR_IF},
+    {"then",    PR_THEN},
     {"else",    PR_ELSE},
     {"while",   PR_WHILE},
     {"do",      PR_DO},
@@ -196,6 +197,8 @@ Parser::Parser()
       constanteActiva(false),
       asignacionActiva(false),
       entradaPorIdentificadorActiva(false),
+      condicionIfPendiente(false),
+      elseIfPendiente(false),
       parentesisDeExpresionAbiertos(0) {
     // Constructor por defecto
 }
@@ -390,6 +393,8 @@ void Parser::reset() {
     constanteActiva = false;
     asignacionActiva = false;
     entradaPorIdentificadorActiva = false;
+    condicionIfPendiente = false;
+    elseIfPendiente = false;
     parentesisDeExpresionAbiertos = 0;
     idConstantePendiente.clear();
     tipoConstantePendiente = Semantica::TipoDato::ERROR_SEMANTICO;
@@ -473,6 +478,25 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
                 tokenActual.lexema
             );
             asignacionActiva = true;
+            break;
+
+        case 21: // EST_IF -> if ( EXPR ) then { ESTATUTOS SINO }
+            // La accion del diagrama se ejecuta al hacer match con THEN,
+            // cuando EXPR ya fue reducida y su resultado esta en las pilas.
+            condicionIfPendiente = true;
+            break;
+
+        case 22: // SINO -> else ESTATUTOS
+            // El ELSE empieza despues del bloque THEN. Se salta su cuerpo
+            // cuando la condicion original fue verdadera.
+            Semantica::ControlFlujo::iniciarElse(estadoSemantico);
+            elseIfPendiente = true;
+            break;
+
+        case 23: // SINO -> epsilon
+            // Este punto cierra tanto IF-THEN como IF-THEN-ELSE: si no hubo
+            // ELSE queda el gotofalso; si hubo ELSE queda el goto final.
+            Semantica::ControlFlujo::finalizarIf(estadoSemantico);
             break;
 
         case 28: // output ( EXPR LEXPR ) ;
@@ -704,6 +728,22 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
         --parentesisDeExpresionAbiertos;
     }
 
+    // En `if ( EXPR ) then`, EXPR ya fue reducida antes de hacer match con
+    // THEN. Este es el punto equivalente a la accion 1 del diagrama.
+    if (condicionIfPendiente &&
+        terminalEsperado == PR_THEN) {
+        Semantica::ControlFlujo::iniciarIf(estadoSemantico);
+        condicionIfPendiente = false;
+    }
+
+    // La produccion SINO -> else ESTATUTOS no contiene un no terminal
+    // posterior que marque el final del bloque ELSE. Por eso su goto final
+    // se rellena al reconocer la llave de cierre de EST_IF.
+    if (elseIfPendiente && terminalEsperado == LLAVE_CIERRA) {
+        Semantica::ControlFlujo::finalizarIf(estadoSemantico);
+        elseIfPendiente = false;
+    }
+
     // '=' no entra en POper. Solo termina el contexto de una asignacion.
     // POper debe contener exclusivamente operadores de expresiones.
     if (asignacionActiva && terminalEsperado == PUNTO_COMA) {
@@ -923,6 +963,7 @@ std::string Parser::nombreSimbolo(int codigo) const {
         case PR_BOOL:    return "bool";
         case PR_STRING:  return "string";
         case PR_IF:      return "if";
+        case PR_THEN:    return "then";
         case PR_ELSE:    return "else";
         case PR_WHILE:   return "while";
         case PR_DO:      return "do";

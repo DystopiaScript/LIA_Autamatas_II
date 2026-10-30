@@ -18,7 +18,7 @@
  * 5. GeneracionCodigo:
  *    PilaO, POper, AVAIL, CONT y cuádruplos.
  * 6. ControlFlujo:
- *    PSaltos y backpatching para una etapa posterior.
+ *    PSaltos y backpatching de estatutos condicionales.
  *
  * Esta capa permanece independiente del driver LL(1) de Parser.
  */
@@ -433,6 +433,23 @@ int precedencia(const std::string& operador);
  * Acciones de GENERACIÓN Y RELLENADO DE SALTOS.
  */
 namespace ControlFlujo {
+
+/**
+ * Consume la condición de PilaO/PTipos y genera un gotofalso pendiente.
+ * La condición debe ser de tipo BOOLEANO.
+ */
+void iniciarIf(EstadoSemantico& estado);
+
+/**
+ * Genera el goto que salta el bloque ELSE, rellena el gotofalso con el
+ * inicio del ELSE y conserva el goto pendiente en PSaltos.
+ */
+void iniciarElse(EstadoSemantico& estado);
+
+/**
+ * Completa el salto pendiente al finalizar un IF-THEN o un IF-THEN-ELSE.
+ */
+void finalizarIf(EstadoSemantico& estado);
 
 /** Genera un salto pendiente y lo registra en PSaltos. */
 int generarSalto(

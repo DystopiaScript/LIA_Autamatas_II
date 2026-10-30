@@ -58,7 +58,7 @@ parser.
   - `PilaO`: operandos, constantes y temporales;
   - `PTipos`: tipos asociados a los operandos;
   - `POper`: operadores pendientes;
-  - `PSaltos`: saltos para control de flujo futuro;
+  - `PSaltos`: saltos pendientes de estatutos condicionales;
   - `AVAIL`: temporales disponibles para reutilización.
 - Temporales `$T1`, `$T2`, etc.
 - Cuádruplos con formato:
@@ -316,6 +316,24 @@ Algunos casos importantes:
   un ejemplo de diagnóstico porque usa `true`, que aún no es literal válido.
 - `10_unarios_logicos.lia`: negación numérica, negación lógica, `&&` y `||`;
   todos sus identificadores están declarados y debe ser un caso válido.
+- `11_condicionales.lia`: ejemplos de `if` sin `else` y de `if` con `else`,
+  incluyendo `gotofalso`, `goto` y backpatching.
+
+La tabla de símbolos muestra el valor conocido durante el recorrido semántico,
+no ejecuta los saltos del programa. En un `if`, el analizador visita tanto el
+bloque `then` como el bloque `else` para generar ambos caminos; por eso una
+variable asignada en ambas ramas puede mostrar el último valor visitado
+textualmente, aunque el código intermedio tenga saltos que determinan la rama
+real durante la ejecución.
+
+La sintaxis de los condicionales conserva la palabra reservada `then` del
+diagrama de la materia:
+
+```lia
+if ( condicion ) then {
+    estatutos
+}
+```
 
 ## Compilación en Windows
 

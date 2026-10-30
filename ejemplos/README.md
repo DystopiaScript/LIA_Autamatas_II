@@ -21,6 +21,8 @@ Lexer -> Parser LL(1) -> acciones semánticas -> cuádruplos
 - `10_unarios_logicos.lia`: negación numérica `-`, negación lógica `!`, `&&`
   y `||`, sin utilizar todavía los literales `true` y `false`. Todos sus
   identificadores están declarados y debe ser un caso válido.
+- `11_condicionales.lia`: estatutos `if` sin `else` y `if` con `else`,
+  generación de `gotofalso`, `goto` y backpatching mediante `PSaltos`.
 
 ## Caso con errores
 
@@ -47,6 +49,16 @@ Lexer -> Parser LL(1) -> acciones semánticas -> cuádruplos
 
 Los comentarios comienzan con `$`, que es la convención de comentarios
 reconocida por el lexer actual.
+
+Los estatutos condicionales siguen la forma del material:
+
+```lia
+if ( condicion ) then {
+    estatutos
+    else
+    estatutos
+}
+```
 
 La gramática actual del proyecto define:
 
