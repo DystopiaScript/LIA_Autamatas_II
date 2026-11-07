@@ -1,0 +1,28 @@
+$ ============================================================
+$ 07_programa_completo.lia
+$ Programa integral: declaraciones, constante, input, expresiones y output.
+$ ============================================================
+
+class ( Completo ) {
+
+const PI : real = 3.1416;
+
+def radio, area : real ;
+def contador, resto : int ;
+def condicion : bool ;
+
+input ( radio, contador ) ;
+radio = 2;
+area = PI * radio * radio ;
+contador = contador + 1 ;
+resto = contador % 2 - 1 ;
+condicion = ( radio > 0.0 ) && ! ( contador == 0 ) ||
+            contador != 0 ;
+
+output ( radio + area ) ;
+output ( area / 2.0 ) ;
+output ( contador ) ;
+output ( resto ) ;
+output ( condicion ) ;
+
+}

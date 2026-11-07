@@ -1,0 +1,17 @@
+$ ============================================================
+$ 01_basico_semantico.lia
+$ Caso valido: declaraciones, suma y asignacion.
+$ Debe generar:
+$   (+, 5, 3, $T1)
+$   (:=, $T1, _, direccion_de_x)
+$ ============================================================
+
+class ( Basico ) {
+
+def x : int ;
+def y : int ;
+
+x = 5 + 3 ;
+y = x ;
+
+}

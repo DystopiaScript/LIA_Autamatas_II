@@ -1,0 +1,15 @@
+$ ============================================================
+$ 02_precedencia_parentesis.lia
+$ Caso valido: precedencia aritmetica, modulo y parentesis.
+$ La multiplicacion y el modulo deben reducirse antes que la suma.
+$ ============================================================
+
+class ( Precedencia ) {
+
+def resultado : int ;
+def base : int ;
+
+base = 10 ;
+resultado = ( 2 + 3 ) * 4 % 3 ;
+
+}

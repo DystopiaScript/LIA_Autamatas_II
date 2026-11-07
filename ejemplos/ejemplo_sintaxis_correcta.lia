@@ -24,16 +24,16 @@ activo = x < y && ! ( x == y ) ;
 activo = x >= 1 || y != 0 ;
 
 $ --- If con else (EST_IF, SINO) ---
-$ OJO: en LIA el else va DENTRO de las llaves del if
-$ (segun la gramatica: if ( EXPR ) { ESTATUTOS SINO } )
-if ( promedio >= 15 ) {
+$ OJO: en LIA se conserva la palabra then del diagrama de la materia
+$ (segun la gramatica: if ( EXPR ) then { ESTATUTOS SINO } )
+if ( promedio >= 15 ) then {
 output ( promedio ) ;
 else
 output ( x , y ) ;
 }
 
 $ --- If sin else (SINO deriva a epsilon) ---
-if ( activo ) {
+if ( activo ) then {
 x = x + 1 ;
 }
 

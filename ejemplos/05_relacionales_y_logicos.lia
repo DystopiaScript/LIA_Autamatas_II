@@ -1,0 +1,18 @@
+$ ============================================================
+$ 05_relacionales_y_logicos.lia
+$ Caso valido: operadores relacionales, AND, OR y NOT.
+$ Las variables se inicializan con expresiones compatibles.
+$ ============================================================
+
+class ( Logica ) {
+
+def a : int ;
+def b : int ;
+def resultado : bool ;
+
+a = 10 ;
+b = 20 ;
+resultado = a < b && ! ( a == b ) ;
+resultado = a >= 10 || b != 0 ;
+
+}

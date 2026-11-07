@@ -1,0 +1,19 @@
+$ ============================================================
+$ 06_constantes.lia
+$ Prueba de declaracion de constantes.
+$ Sintaxis integrada:
+$   const PI : real = 3.1416;
+$ ============================================================
+
+class ( Constantes ) {
+
+const PI : real = 3.1416;
+const LIMITE : int = 10;
+
+def radio : real ;
+def resultado : real ;
+
+radio = 5.0 ;
+resultado = PI * radio ;
+
+}
