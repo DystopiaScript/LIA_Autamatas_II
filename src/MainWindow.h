@@ -10,9 +10,6 @@
 #include <QString>
 #include "Lexer.h"
 #include "Parser.h"
-#include "SemanticAnalysis.h"
-
-class SemanticWindow;
 class MainWindow : public QMainWindow {
      /**Q_Objet: Avisar al compilador que esta clase tendra eventos y slots de Qt 
      (slot es una función que se ejecuta en respuesta a una señal, como un clic de botón)
@@ -75,7 +72,6 @@ private:
      */
 
     Parser* parser;
-    SemanticWindow* ventanaSemantica;
 
     // ESTADO DE LA APLICACIÓN
                                 //Qstring es la clase de Qt para manejar texto (similar a std::string pero con soporte Unicode y otras funcionalidades)

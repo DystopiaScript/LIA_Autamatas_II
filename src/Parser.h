@@ -8,7 +8,6 @@
 #include "Token.h"
 #include "ErrorSintactico.h"
 #include "Lexer.h"
-#include "SemanticParser.h"
 
 /**
  * @file Parser.h
@@ -45,11 +44,8 @@
 // ========== CONSTANTES DE DIMENSIONES ==========
 const int NUM_NO_TERMINALES = 29;   // Filas de la matriz predictiva
 const int NUM_TERMINALES    = 45;   // Columnas de la matriz predictiva (44 terminales + $)
-// Las producciones 67 y 68 corresponden a:
-//     DECLARA -> const id : TIPO = FACT ; DECLARA
-//     EXPR3 -> - EXPR4
-const int NUM_PRODUCCIONES  = 68;   // Producciones de la gramática LIA
-const int MAX_LADO_DERECHO  = 9;    // IF-THEN-ELSE puede tener 9 símbolos
+const int NUM_PRODUCCIONES  = 66;   // Producciones de la gramática LIA
+const int MAX_LADO_DERECHO  = 8;    // La producción más larga tiene 8 símbolos (1 y 21)
 
 // ========== CÓDIGOS DE NO TERMINALES (1-29) ==========
 /**
@@ -111,9 +107,7 @@ enum PalabraReservada {
     PR_LOOP    = 212,
     PR_BREAK   = 213,
     PR_INPUT   = 214,
-    PR_OUTPUT  = 215,
-    PR_CONST   = 216,
-    PR_THEN    = 217
+    PR_OUTPUT  = 215
 };
 
 // Código del fin de entrada (token virtual que se procesa al agotar los tokens)
@@ -145,49 +139,23 @@ private:
                                            // (estilo "Pila de Ejecución" vista en clase)
     bool sintaxisCorrecta;                 // Resultado final del análisis
 
-    // =====================================================================
-    // ESTADO DEL ANALISIS SEMANTICO EMBEBIDO
-    //
-    // El parser sigue siendo LL(1), pero ahora conserva tambien el estado
-    // necesario para ejecutar las acciones semanticas mientras aplica las
-    // producciones de la gramatica. De esta forma no es necesario volver a
-    // recorrer los tokens despues de terminar el analisis sintactico.
-    // =====================================================================
-    Semantica::EstadoSemantico estadoSemantico;
-    std::vector<std::string> erroresSemanticos;
-    bool semanticaCorrecta;                 // Resultado de la fase semantica
-    bool declaracionActiva;                 // Se esta procesando una declaracion
-    // Durante `const PI : real = 3.1416`, estos campos conservan los datos
-    // entre distintos match del driver LL(1). La constante se registra al
-    // reconocer el punto y coma, cuando ya se tienen sus cuatro partes.
-    bool constanteActiva;
-    bool asignacionActiva;                 // Se esta procesando una asignacion
-    bool entradaPorIdentificadorActiva;    // input(id, id, ...) segun gramatica
-    bool condicionIfPendiente;             // Se espera cerrar la condicion de if
-    bool elseIfPendiente;                  // Se espera cerrar el bloque ELSE
-    int parentesisDeExpresionAbiertos;     // Control de FACT -> ( EXPR )
-    std::string idConstantePendiente;
-    Semantica::TipoDato tipoConstantePendiente =
-        Semantica::TipoDato::ERROR_SEMANTICO;
-    std::string valorConstantePendiente;
-
     // ========== MATRIZ PREDICTIVA M[X, a] ==========
     /**
      * 29 filas (no terminales) x 45 columnas (terminales + $).
-     * Valor = número de producción a aplicar (1-68), o -1 = error.
+     * Valor = número de producción a aplicar (1-66), o -1 = error.
      *
      * Indexado: MATRIZ_PREDICTIVA[codigoNoTerminal - 1][columnaDe(codigoTerminal)]
      *
      * Orden de columnas (0-44):
      *  id cteentera ctereal ctenotacion ctecaracter ctestring class def int
-     *  float/real char bool string if else while do dowhile loop break input output
+     *  float char bool string if else while do dowhile loop break input output
      *  ( ) { } : ; , = ! || && == != < <= > >= + - * / % $
      */
     static const int MATRIZ_PREDICTIVA[NUM_NO_TERMINALES][NUM_TERMINALES];
 
     // ========== MATRIZ DE PRODUCCIONES ==========
     /**
-     * 68 filas (una por producción) x 9 columnas:
+     * 66 filas (una por producción) x 9 columnas:
      *  - Columna 0: LONGITUD del lado derecho (0 = producción épsilon)
      *  - Columnas 1..8: los códigos de los símbolos del lado derecho, en orden
      *
@@ -262,21 +230,6 @@ public:
      */
     bool esCorrecto() const;
 
-    /**
-     * @brief Indica si las acciones semánticas terminaron sin errores.
-     */
-    bool semanticaEsCorrecta() const;
-
-    /**
-     * @brief Devuelve el estado producido durante el análisis semántico.
-     */
-    const Semantica::EstadoSemantico& getEstadoSemantico() const;
-
-    /**
-     * @brief Devuelve los errores semánticos producidos por el parser.
-     */
-    const std::vector<std::string>& getErroresSemanticos() const;
-
 private:
     // ========== FUNCIONES AUXILIARES (el "puente" lexer-parser) ==========
     /**
@@ -335,46 +288,13 @@ private:
     /**
      * @brief Construye la lista de terminales esperados para un no terminal
      * @param codigoNoTerminal Código del no terminal (1-29)
-     * @return Tipos aceptados: "int, float/real, char, bool, string"
+     * @return String tipo "int, float, char, bool, string"
      *
      * Recorre la fila del no terminal en la matriz predictiva y junta los
      * nombres de las columnas cuya celda != -1. Así los mensajes de error
      * salen DIRECTO de la matriz (los FIRST de la fila).
      */
     std::string esperadosDe(int codigoNoTerminal) const;
-
-    // ------------------------------------------------------------------
-    // Puente entre las producciones LL(1) y las acciones semánticas.
-    // ------------------------------------------------------------------
-    /**
-     * Ejecuta la accion asociada a una produccion de la gramatica.
-     *
-     * Ejemplos:
-     * - FACT -> id apila el identificador.
-     * - EXPR5' -> + EXPR5 guarda '+' en POper.
-     * - TERM' -> epsilon reduce *, / o %.
-     *
-     * Esta funcion se invoca cuando el driver decide aplicar la produccion,
-     * no cuando el lexer produce el token.
-     */
-    void ejecutarAccionDeProduccion(int numeroProduccion);
-
-    /**
-     * Ejecuta la accion asociada a un match terminal.
-     *
-     * Se utiliza para acciones que necesitan el lexema concreto del token,
-     * como acumular un identificador o registrar el tipo de una declaracion.
-     */
-    void ejecutarAccionDeMatch(int terminalEsperado);
-
-    /**
-     * Reduce operadores pendientes hasta el nivel de precedencia indicado.
-     *
-     * Los niveles usados son:
-     * 1 = OR, 2 = AND, 3 = relacionales, 4 = suma/resta,
-     * 5 = multiplicacion/division/modulo.
-     */
-    void reducirOperadoresConPrecedenciaMinima(int precedenciaMinima);
 
     /**
      * @brief Registra un error sintáctico en la lista
