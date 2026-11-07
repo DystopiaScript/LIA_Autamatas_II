@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "SemanticWindow.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QFile>
@@ -13,7 +14,8 @@
 // CONSTRUCTOR Y DESTRUCTOR
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent), lexer(nullptr), parser(nullptr), archivoActual(""), modificado(false) {
+    : QMainWindow(parent), lexer(nullptr), parser(nullptr),
+      ventanaSemantica(nullptr), archivoActual(""), modificado(false) {
 
     // Crear instancia del lexer
     lexer = new Lexer();
@@ -29,6 +31,11 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 MainWindow::~MainWindow() {
+    if (ventanaSemantica != nullptr) {
+        ventanaSemantica->close();
+        delete ventanaSemantica;
+        ventanaSemantica = nullptr;
+    }
     // Liberar memoria del lexer
     if (lexer != nullptr) {
         delete lexer;
@@ -229,6 +236,11 @@ void MainWindow::onLimpiar() {
     
     // Limpiar paneles
     limpiarPaneles();
+    if (ventanaSemantica != nullptr) {
+        ventanaSemantica->close();
+        delete ventanaSemantica;
+        ventanaSemantica = nullptr;
+    }
     
     // Reiniciar estado
     archivoActual = "";
@@ -239,6 +251,19 @@ void MainWindow::onLimpiar() {
 }
 
 void MainWindow::onAnalizar() {
+    // =====================================================================
+    // FLUJO COMPLETO DE ANALISIS
+    //
+    // Esta funcion es el punto de entrada de la interfaz. No implementa las
+    // reglas del lenguaje; coordina los modulos:
+    //
+    // 1. Lexer: reconoce caracteres y produce tokens bajo demanda.
+    // 2. Parser: valida la gramatica LL(1).
+    // 3. Acciones semanticas: se ejecutan dentro de Parser::Analiza().
+    // 4. SemanticWindow: presenta el estado semantico producido.
+    //
+    // El parser recibe el lexer, no un vector precalculado de tokens.
+    // =====================================================================
     // Obtener texto del editor
     QString texto = editorTexto->toPlainText();
     
@@ -262,7 +287,9 @@ void MainWindow::onAnalizar() {
     // (léxico o sintáctico) el análisis se detiene.
     lexer->setSourceCode(codigo);   // carga el código y hace reset() del léxico
     parser->setLexer(lexer);        // el parser pedirá tokens a este léxico
-    parser->Analiza();              // dispara TODO el pipeline en una pasada
+    // Parser::Analiza() solicita tokens al lexer y, mientras aplica las
+    // producciones, ejecuta las acciones semanticas embebidas.
+    parser->Analiza();
 
     // Actualizar paneles:
     //  - Tokens: el historial visual (copia guardada durante el análisis on-demand)
@@ -271,6 +298,30 @@ void MainWindow::onAnalizar() {
     actualizarPanelTokens(lexer->getHistorialVisual());
     actualizarPanelSintaxis();
     actualizarPanelErrores(lexer->getErroresLexicos());
+
+    // La ventana semantica solo se abre cuando el lexer y la sintaxis fueron
+    // correctos. El resultado semantico ya fue generado por el parser; aqui
+    // no se vuelve a recorrer lexer->getTokens().
+    if (lexer->getErroresLexicos().empty() && parser->esCorrecto()) {
+        // El parser ya ejecutó las acciones semánticas embebidas mientras
+        // aplicaba las producciones LL(1). Aquí solamente empaquetamos su
+        // resultado para que la ventana lo presente.
+        SemanticAnalysisResult resultado;
+        // Copia del estado producido durante Parser::Analiza().
+        resultado.estado = parser->getEstadoSemantico();
+        resultado.errores = parser->getErroresSemanticos();
+        resultado.correcto = parser->semanticaEsCorrecta();
+
+        if (ventanaSemantica != nullptr) {
+            ventanaSemantica->close();
+            delete ventanaSemantica;
+        }
+        ventanaSemantica = new SemanticWindow(resultado, this);
+        ventanaSemantica->setAttribute(Qt::WA_DeleteOnClose, false);
+        ventanaSemantica->show();
+        ventanaSemantica->raise();
+        ventanaSemantica->activateWindow();
+    }
 }
 
 void MainWindow::onSalir() {
