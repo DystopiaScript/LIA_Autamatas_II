@@ -82,7 +82,234 @@ void reducirOperadorPendiente(
     }
 }
 
+std::string formatearNumero(double valor, bool entero) {
+    if (entero) {
+        return std::to_string(static_cast<long long>(valor));
+    }
+    std::ostringstream salida;
+    salida << std::setprecision(12) << valor;
+    return salida.str();
+}
+
+std::string calcularValor(
+    const std::string& operador,
+    const std::string& op1,
+    const std::string& op2
+) {
+    const bool operandosBooleanos =
+        (op1 == "true" || op1 == "false") &&
+        (op2 == "true" || op2 == "false");
+    if (operandosBooleanos) {
+        const bool valor1 = op1 == "true";
+        const bool valor2 = op2 == "true";
+
+        if (operador == "&&" || operador == "and") {
+            return (valor1 && valor2) ? "true" : "false";
+        }
+        if (operador == "||" || operador == "or") {
+            return (valor1 || valor2) ? "true" : "false";
+        }
+        if (operador == "==" || operador == "!=") {
+            const bool iguales = valor1 == valor2;
+            return (operador == "==" ? iguales : !iguales)
+                ? "true"
+                : "false";
+        }
+    }
+
+    const bool esEntero =
+        op1.find('.') == std::string::npos &&
+        op2.find('.') == std::string::npos;
+    double valor1 = 0;
+    double valor2 = 0;
+    try {
+        valor1 = std::stod(op1);
+        valor2 = std::stod(op2);
+    } catch (...) {
+        return {};
+    }
+
+    if (operador == "+") return formatearNumero(valor1 + valor2, esEntero);
+    if (operador == "-") return formatearNumero(valor1 - valor2, esEntero);
+    if (operador == "*") return formatearNumero(valor1 * valor2, esEntero);
+    if (operador == "/") {
+        if (valor2 == 0) return {};
+        return formatearNumero(valor1 / valor2, false);
+    }
+    if (operador == "%") {
+        if (static_cast<long long>(valor2) == 0) return {};
+        return std::to_string(
+            static_cast<long long>(valor1) %
+            static_cast<long long>(valor2)
+        );
+    }
+    if (operador == "==" || operador == "!=" ||
+        operador == "<" || operador == "<=" ||
+        operador == ">" || operador == ">=") {
+        bool resultado = false;
+        if (operador == "==") resultado = valor1 == valor2;
+        if (operador == "!=") resultado = valor1 != valor2;
+        if (operador == "<") resultado = valor1 < valor2;
+        if (operador == "<=") resultado = valor1 <= valor2;
+        if (operador == ">") resultado = valor1 > valor2;
+        if (operador == ">=") resultado = valor1 >= valor2;
+        return resultado ? "true" : "false";
+    }
+    return {};
+}
+
 } // namespace
+
+int operadorACodigo(const std::string& op) {
+    if (op == "+") return OP_NUM_SUMA;
+    if (op == "-") return OP_NUM_RESTA;
+    if (op == "*") return OP_NUM_MULT;
+    if (op == "/") return OP_NUM_DIV;
+    if (op == "%") return OP_NUM_MODULO;
+    if (op == "=") return OP_NUM_ASIG;
+    if (op == "==") return OP_NUM_IGUAL;
+    if (op == "<") return OP_NUM_MENOR;
+    if (op == "<=") return OP_NUM_MENORIGUAL;
+    if (op == ">") return OP_NUM_MAYOR;
+    if (op == ">=") return OP_NUM_MAYORIGUAL;
+    if (op == "!=") return OP_NUM_DIFERENTE;
+    if (op == "!") return OP_NUM_NOT;
+    if (op == "&&" || op == "and") return OP_NUM_AND;
+    if (op == "||" || op == "or") return OP_NUM_OR;
+    if (op == "(") return OP_NUM_PAREN_ABRE;
+    if (op == "NEG") return OP_NUM_NEG;
+    if (op == "gotofalso") return OP_NUM_GOTOFALSO;
+    if (op == "goto") return OP_NUM_GOTO;
+    if (op == "input") return OP_NUM_INPUT;
+    if (op == "output") return OP_NUM_OUTPUT;
+    return -1;
+}
+
+std::string codigoAOperador(int cod) {
+    switch (cod) {
+        case OP_NUM_SUMA: return "+";
+        case OP_NUM_RESTA: return "-";
+        case OP_NUM_MULT: return "*";
+        case OP_NUM_DIV: return "/";
+        case OP_NUM_MODULO: return "%";
+        case OP_NUM_ASIG: return "=";
+        case OP_NUM_IGUAL: return "==";
+        case OP_NUM_MENOR: return "<";
+        case OP_NUM_MENORIGUAL: return "<=";
+        case OP_NUM_MAYOR: return ">";
+        case OP_NUM_MAYORIGUAL: return ">=";
+        case OP_NUM_DIFERENTE: return "!=";
+        case OP_NUM_NOT: return "!";
+        case OP_NUM_AND: return "&&";
+        case OP_NUM_OR: return "||";
+        case OP_NUM_PAREN_ABRE: return "(";
+        case OP_NUM_NEG: return "NEG";
+        case OP_NUM_GOTOFALSO: return "gotofalso";
+        case OP_NUM_GOTO: return "goto";
+        case OP_NUM_INPUT: return "input";
+        case OP_NUM_OUTPUT: return "output";
+        default: return std::to_string(cod);
+    }
+}
+
+int tipoACodigo(TipoDato tipo) {
+    switch (tipo) {
+        case TipoDato::ENTERO: return TIPO_NUM_ENTERO;
+        case TipoDato::REAL: return TIPO_NUM_REAL;
+        case TipoDato::CARACTER: return TIPO_NUM_CARACTER;
+        case TipoDato::BOOLEANO: return TIPO_NUM_BOOLEANO;
+        case TipoDato::CADENA: return TIPO_NUM_CADENA;
+        case TipoDato::ERROR_SEMANTICO:
+        default: return TIPO_NUM_ERROR;
+    }
+}
+
+TipoDato codigoATipo(int cod) {
+    switch (cod) {
+        case TIPO_NUM_ENTERO: return TipoDato::ENTERO;
+        case TIPO_NUM_REAL: return TipoDato::REAL;
+        case TIPO_NUM_CARACTER: return TipoDato::CARACTER;
+        case TIPO_NUM_BOOLEANO: return TipoDato::BOOLEANO;
+        case TIPO_NUM_CADENA: return TipoDato::CADENA;
+        default: return TipoDato::ERROR_SEMANTICO;
+    }
+}
+
+int registrarLiteral(EstadoSemantico& estado, const std::string& valor, TipoDato tipo) {
+    (void)tipo;
+    auto it = estado.literalAId.find(valor);
+    if (it != estado.literalAId.end()) {
+        return it->second;
+    }
+    int id = estado.siguienteLiteral++;
+    estado.tablaLiterales[id] = valor;
+    estado.literalAId[valor] = id;
+    return id;
+}
+
+int operandoANumero(const std::string& op, EstadoSemantico& estado) {
+    if (op.empty() || op == "_" || op == "___") {
+        return OPERANDO_NULO;
+    }
+    const std::string prefijoRAM = "@VRAM[";
+    if (op.size() > prefijoRAM.size() &&
+        op.compare(0, prefijoRAM.size(), prefijoRAM) == 0 &&
+        op.back() == ']') {
+        return std::stoi(op.substr(prefijoRAM.size(), op.size() - prefijoRAM.size() - 1));
+    }
+    if (op.size() >= 2 && op[0] == '$' && op[1] == 'T') {
+        return BASE_TEMPORALES + std::stoi(op.substr(2));
+    }
+    auto itSim = estado.tablaSimbolos.find(op);
+    if (itSim != estado.tablaSimbolos.end()) {
+        return itSim->second.direccionRAM;
+    }
+
+    // Es un valor literal numérico, booleano o cadena
+    return registrarLiteral(estado, op, TipoDato::ERROR_SEMANTICO);
+}
+
+std::string numeroAOperandoVisual(int cod, const EstadoSemantico& estado) {
+    if (cod == OPERANDO_NULO) {
+        return "_";
+    }
+    if (cod >= 0 && cod < BASE_TEMPORALES) {
+        return std::to_string(cod);
+    }
+    if (cod > BASE_TEMPORALES && cod < BASE_CONSTANTES) {
+        return "$T" + std::to_string(cod - BASE_TEMPORALES);
+    }
+    if (cod > BASE_CONSTANTES) {
+        auto it = estado.tablaLiterales.find(cod);
+        if (it != estado.tablaLiterales.end()) {
+            return it->second;
+        }
+    }
+    return std::to_string(cod);
+}
+
+std::string numeroAOperandoRaw(int cod, const EstadoSemantico& estado) {
+    if (cod == OPERANDO_NULO) {
+        return "_";
+    }
+    if (cod >= 0 && cod < BASE_TEMPORALES) {
+        return claveVariableRAM(cod);
+    }
+    if (cod > BASE_TEMPORALES && cod < BASE_CONSTANTES) {
+        return "$T" + std::to_string(cod - BASE_TEMPORALES);
+    }
+    if (cod > BASE_CONSTANTES) {
+        auto it = estado.tablaLiterales.find(cod);
+        if (it != estado.tablaLiterales.end()) {
+            return it->second;
+        }
+    }
+    return std::to_string(cod);
+}
+
+std::string resolverOperandoVisual(const EstadoSemantico& estado, int opNum) {
+    return numeroAOperandoVisual(opNum, estado);
+}
 
 // ============================================================================
 // REPRESENTACION DE TIPOS
@@ -174,7 +401,7 @@ void apilarTipo(EstadoSemantico& estado, TipoDato tipo) {
             "[TIPOS] No se puede apilar un tipo invalido"
         );
     }
-    estado.PTipos.push(tipo);
+    estado.PTipos.push(tipoACodigo(tipo));
 }
 
 TipoDato CuboSemantico(
@@ -235,9 +462,9 @@ void validarOperacion(
     }
 
     auto tipos = estado.PTipos;
-    const TipoDato t2 = tipos.top();
+    const TipoDato t2 = codigoATipo(tipos.top());
     tipos.pop();
-    const TipoDato t1 = tipos.top();
+    const TipoDato t1 = codigoATipo(tipos.top());
     const TipoDato resultado = CuboSemantico(t1, operador, t2);
 
     if (resultado == TipoDato::ERROR_SEMANTICO) {
@@ -249,7 +476,7 @@ void validarOperacion(
 
     estado.PTipos.pop();
     estado.PTipos.pop();
-    estado.PTipos.push(resultado);
+    estado.PTipos.push(tipoACodigo(resultado));
 }
 
 void validarOperacionUnaria(
@@ -262,7 +489,7 @@ void validarOperacionUnaria(
         );
     }
 
-    const TipoDato tipo = estado.PTipos.top();
+    const TipoDato tipo = codigoATipo(estado.PTipos.top());
     const bool negacionLogica =
         operador == "!" && tipo == TipoDato::BOOLEANO;
     const bool negacionNumerica =
@@ -276,7 +503,7 @@ void validarOperacionUnaria(
     }
     estado.PTipos.pop();
     estado.PTipos.push(
-        negacionLogica ? TipoDato::BOOLEANO : tipo
+        tipoACodigo(negacionLogica ? TipoDato::BOOLEANO : tipo)
     );
 }
 
@@ -557,10 +784,10 @@ void abrirParentesis(EstadoSemantico& estado) {
 }
 
 void cerrarParentesis(EstadoSemantico& estado) {
-    while (!estado.POper.empty() && estado.POper.top() != "(") {
-        const std::string operador = estado.POper.top();
+    while (!estado.POper.empty() && estado.POper.top() != OP_NUM_PAREN_ABRE) {
+        const int codOp = estado.POper.top();
         estado.POper.pop();
-        reducirOperadorPendiente(estado, operador);
+        reducirOperadorPendiente(estado, codigoAOperador(codOp));
     }
     if (estado.POper.empty()) {
         throw std::logic_error(
@@ -571,10 +798,10 @@ void cerrarParentesis(EstadoSemantico& estado) {
 }
 
 void finalizarOperacionPendiente(EstadoSemantico& estado) {
-    while (!estado.POper.empty() && estado.POper.top() != "(") {
-        const std::string operador = estado.POper.top();
+    while (!estado.POper.empty() && estado.POper.top() != OP_NUM_PAREN_ABRE) {
+        const int codOp = estado.POper.top();
         estado.POper.pop();
-        reducirOperadorPendiente(estado, operador);
+        reducirOperadorPendiente(estado, codigoAOperador(codOp));
     }
 }
 
@@ -591,10 +818,10 @@ std::string obtenerResultado(EstadoSemantico& estado) {
         );
     }
 
-    const std::string resultado = estado.PilaO.top();
+    const int resCod = estado.PilaO.top();
     estado.PilaO.pop();
     estado.PTipos.pop();
-    return resultado;
+    return numeroAOperandoRaw(resCod, estado);
 }
 
 void finalizarAsignacion(EstadoSemantico& estado) {
@@ -622,13 +849,13 @@ void finalizarAsignacion(EstadoSemantico& estado) {
 
     VerificacionSemantica::validarAsignacion(
         estado,
-        estado.PTipos.top()
+        codigoATipo(estado.PTipos.top())
     );
 
-    const std::string expresion = estado.PilaO.top();
+    const int resCod = estado.PilaO.top();
     estado.PilaO.pop();
     estado.PTipos.pop();
-    GeneracionCodigo::generarAsignacion(estado, expresion);
+    GeneracionCodigo::generarAsignacion(estado, numeroAOperandoRaw(resCod, estado));
 
     estado.idDestinoAsignacion.clear();
     estado.tipoDestinoAsignacion = TipoDato::ERROR_SEMANTICO;
@@ -763,74 +990,6 @@ std::string valorConocido(
     }
 }
 
-std::string formatearNumero(double valor, bool entero) {
-    if (entero) {
-        return std::to_string(static_cast<long long>(valor));
-    }
-    std::ostringstream salida;
-    salida << std::setprecision(12) << valor;
-    return salida.str();
-}
-
-std::string calcularValor(
-    const std::string& operador,
-    const std::string& op1,
-    const std::string& op2
-) {
-    // Esta evaluacion es una ayuda de visualizacion y propagacion semantica.
-    // El cuadruplo siempre se genera aunque no sea posible calcular su valor.
-    const bool operandosBooleanos =
-        (op1 == "true" || op1 == "false") &&
-        (op2 == "true" || op2 == "false");
-    if (operandosBooleanos) {
-        const bool valor1 = op1 == "true";
-        const bool valor2 = op2 == "true";
-
-        if (operador == "&&" || operador == "and") {
-            return (valor1 && valor2) ? "true" : "false";
-        }
-        if (operador == "||" || operador == "or") {
-            return (valor1 || valor2) ? "true" : "false";
-        }
-        if (operador == "==" || operador == "!=") {
-            const bool iguales = valor1 == valor2;
-            return (operador == "==" ? iguales : !iguales)
-                ? "true"
-                : "false";
-        }
-    }
-
-    const bool esEntero =
-        op1.find('.') == std::string::npos &&
-        op2.find('.') == std::string::npos;
-    const double valor1 = std::stod(op1);
-    const double valor2 = std::stod(op2);
-
-    if (operador == "+") return formatearNumero(valor1 + valor2, esEntero);
-    if (operador == "-") return formatearNumero(valor1 - valor2, esEntero);
-    if (operador == "*") return formatearNumero(valor1 * valor2, esEntero);
-    if (operador == "/") return formatearNumero(valor1 / valor2, false);
-    if (operador == "%") {
-        return std::to_string(
-            static_cast<long long>(valor1) %
-            static_cast<long long>(valor2)
-        );
-    }
-    if (operador == "==" || operador == "!=" ||
-        operador == "<" || operador == "<=" ||
-        operador == ">" || operador == ">=") {
-        bool resultado = false;
-        if (operador == "==") resultado = valor1 == valor2;
-        if (operador == "!=") resultado = valor1 != valor2;
-        if (operador == "<") resultado = valor1 < valor2;
-        if (operador == "<=") resultado = valor1 <= valor2;
-        if (operador == ">") resultado = valor1 > valor2;
-        if (operador == ">=") resultado = valor1 >= valor2;
-        return resultado ? "true" : "false";
-    }
-    return {};
-}
-
 } // namespace
 
 // --------------------------------------------------------------------------
@@ -854,30 +1013,38 @@ void registrarEstadoPilas(
 
     auto operandos = estado.PilaO;
     while (!operandos.empty()) {
-        historial.operandos.push_back(operandos.top());
+        historial.operandosNum.push_back(operandos.top());
+        historial.operandos.push_back(std::to_string(operandos.top()));
         operandos.pop();
     }
+    std::reverse(historial.operandosNum.begin(), historial.operandosNum.end());
     std::reverse(historial.operandos.begin(), historial.operandos.end());
 
     auto tipos = estado.PTipos;
     while (!tipos.empty()) {
-        historial.tipos.push_back(tipoToString(tipos.top()));
+        historial.tiposNum.push_back(tipos.top());
+        historial.tipos.push_back(std::to_string(tipos.top()));
         tipos.pop();
     }
+    std::reverse(historial.tiposNum.begin(), historial.tiposNum.end());
     std::reverse(historial.tipos.begin(), historial.tipos.end());
 
     auto operadores = estado.POper;
     while (!operadores.empty()) {
-        historial.operadores.push_back(operadores.top());
+        historial.operadoresNum.push_back(operadores.top());
+        historial.operadores.push_back(std::to_string(operadores.top()));
         operadores.pop();
     }
+    std::reverse(historial.operadoresNum.begin(), historial.operadoresNum.end());
     std::reverse(historial.operadores.begin(), historial.operadores.end());
 
     auto avail = estado.temporalesDisponibles;
     while (!avail.empty()) {
-        historial.avail.push_back(avail.top());
+        historial.availNum.push_back(avail.top());
+        historial.avail.push_back(std::to_string(avail.top()));
         avail.pop();
     }
+    std::reverse(historial.availNum.begin(), historial.availNum.end());
     std::reverse(historial.avail.begin(), historial.avail.end());
 
     auto saltos = estado.PSaltos;
@@ -894,33 +1061,35 @@ void apilarOperando(
     EstadoSemantico& estado,
     const std::string& operando
 ) {
-    estado.PilaO.push(operando);
-    registrarEstadoPilas(estado, "PUSH operando: " + operando);
+    const int opNum = operandoANumero(operando, estado);
+    estado.PilaO.push(opNum);
+    registrarEstadoPilas(estado, "PUSH operando: " + std::to_string(opNum));
 }
 
 void guardarOperador(
     EstadoSemantico& estado,
     const std::string& operador
 ) {
-    if (precedencia(operador) < 0) {
+    const int codOp = operadorACodigo(operador);
+    if (codOp < 0) {
         throw std::invalid_argument(
             "[CUADRUPLOS] Operador no reconocido: " + operador
         );
     }
-    estado.POper.push(operador);
-    registrarEstadoPilas(estado, "PUSH operador: " + operador);
+    estado.POper.push(codOp);
+    registrarEstadoPilas(estado, "PUSH operador: " + std::to_string(codOp));
 }
 
 void abrirParentesis(EstadoSemantico& estado) {
-    estado.POper.push("(");
-    registrarEstadoPilas(estado, "PUSH marca: (");
+    estado.POper.push(OP_NUM_PAREN_ABRE);
+    registrarEstadoPilas(estado, "PUSH marca: " + std::to_string(OP_NUM_PAREN_ABRE));
 }
 
 void cerrarParentesis(EstadoSemantico& estado) {
-    while (!estado.POper.empty() && estado.POper.top() != "(") {
-        const std::string operador = estado.POper.top();
+    while (!estado.POper.empty() && estado.POper.top() != OP_NUM_PAREN_ABRE) {
+        const int codOp = estado.POper.top();
         estado.POper.pop();
-        reducirOperadorPendiente(estado, operador);
+        reducirOperadorPendiente(estado, codigoAOperador(codOp));
     }
 
     if (estado.POper.empty()) {
@@ -929,14 +1098,14 @@ void cerrarParentesis(EstadoSemantico& estado) {
         );
     }
     estado.POper.pop();
-    registrarEstadoPilas(estado, "POP marca: )");
+    registrarEstadoPilas(estado, "POP marca: " + std::to_string(OP_NUM_PAREN_ABRE));
 }
 
 std::string obtenerTemporalAvail(EstadoSemantico& estado) {
     if (!estado.temporalesDisponibles.empty()) {
-        const std::string temporal = estado.temporalesDisponibles.top();
+        const int tempCod = estado.temporalesDisponibles.top();
         estado.temporalesDisponibles.pop();
-        return temporal;
+        return "$T" + std::to_string(tempCod - BASE_TEMPORALES);
     }
     return "$T" + std::to_string(estado.siguienteTemporal++);
 }
@@ -948,7 +1117,8 @@ void liberarTemporalAvail(
     if (operando.size() > 2 &&
         operando[0] == '$' &&
         operando[1] == 'T') {
-        estado.temporalesDisponibles.push(operando);
+        const int n = std::stoi(operando.substr(2));
+        estado.temporalesDisponibles.push(BASE_TEMPORALES + n);
     }
 }
 
@@ -959,12 +1129,24 @@ int generarCuadruplo(
     const std::string& op2,
     const std::string& resultado
 ) {
+    const int coperNum = operadorACodigo(operador);
+    const int op1Num = operandoANumero(op1, estado);
+    const int op2Num = operandoANumero(op2, estado);
+    const int resNum = operandoANumero(resultado, estado);
+
     const int indice = estado.CONT++;
     estado.cuadruplos.push_back({
+        coperNum,
+        op1Num,
+        op2Num,
+        resNum,
         operador,
         operandoVisible(op1),
         operandoVisible(op2),
-        operandoVisible(resultado)
+        operandoVisible(resultado),
+        op1,
+        op2,
+        resultado
     });
     return indice;
 }
@@ -984,10 +1166,13 @@ void reducirOperacion(
 
     VerificacionSemantica::validarOperacion(estado, operador);
 
-    const std::string op2 = estado.PilaO.top();
+    const int op2Cod = estado.PilaO.top();
     estado.PilaO.pop();
-    const std::string op1 = estado.PilaO.top();
+    const int op1Cod = estado.PilaO.top();
     estado.PilaO.pop();
+
+    const std::string op2 = numeroAOperandoRaw(op2Cod, estado);
+    const std::string op1 = numeroAOperandoRaw(op1Cod, estado);
 
     const std::string temporal = obtenerTemporalAvail(estado);
     generarCuadruplo(estado, operador, op1, op2, temporal);
@@ -1025,8 +1210,10 @@ void reducirOperacionUnaria(
 
     VerificacionSemantica::validarOperacionUnaria(estado, operador);
 
-    const std::string operando = estado.PilaO.top();
+    const int opCod = estado.PilaO.top();
     estado.PilaO.pop();
+
+    const std::string operando = numeroAOperandoRaw(opCod, estado);
 
     const std::string temporal = obtenerTemporalAvail(estado);
     generarCuadruplo(estado, operador, operando, "_", temporal);
@@ -1118,7 +1305,7 @@ void iniciarIf(EstadoSemantico& estado) {
         );
     }
 
-    const TipoDato tipoCondicion = estado.PTipos.top();
+    const TipoDato tipoCondicion = codigoATipo(estado.PTipos.top());
     if (tipoCondicion != TipoDato::BOOLEANO) {
         throw std::logic_error(
             "[SEMANTICA] La condicion del IF debe ser de tipo BOOLEANO"
@@ -1126,8 +1313,9 @@ void iniciarIf(EstadoSemantico& estado) {
     }
 
     estado.PTipos.pop();
-    const std::string condicion = estado.PilaO.top();
+    const int condCod = estado.PilaO.top();
     estado.PilaO.pop();
+    const std::string condicion = numeroAOperandoRaw(condCod, estado);
     const int salto = generarSalto(estado, "gotofalso", condicion);
     GeneracionCodigo::liberarTemporalAvail(estado, condicion);
     GeneracionCodigo::registrarEstadoPilas(
@@ -1200,11 +1388,216 @@ void completarSalto(
             "[SALTOS] Indice de cuadruplo invalido durante backpatching"
         );
     }
-    estado.cuadruplos[indiceCuadruplo - 1].res =
-        std::to_string(destino);
+    const std::string destinoStr = std::to_string(destino);
+    estado.cuadruplos[indiceCuadruplo - 1].res = destinoStr;
+    estado.cuadruplos[indiceCuadruplo - 1].resRaw = destinoStr;
+    estado.cuadruplos[indiceCuadruplo - 1].resNum = destino;
 }
 
 } // namespace ControlFlujo
+
+// ============================================================================
+// MODULO 7: INTERPRETE / EVALUADOR DE CUADRUPLOS
+//
+// Recorre los cuadruplos generados respetando el flujo de saltos condicionales
+// (gotofalso) e incondicionales (goto) para fijar el valor real de las variables
+// de acuerdo a la rama efectivamente ejecutada.
+// ============================================================================
+
+namespace Interprete {
+
+void ejecutarCuadruplos(EstadoSemantico& estado) {
+    if (estado.cuadruplos.empty()) {
+        return;
+    }
+
+    // Mapeo de direccion RAM -> identificador de la variable
+    std::map<int, std::string> ramAId;
+    std::map<std::string, std::string> memoriaVariables;
+    std::map<std::string, bool> variablesConocidas;
+    std::map<std::string, std::string> memoriaTemporales;
+
+    for (const auto& [id, simbolo] : estado.tablaSimbolos) {
+        if (simbolo.direccionRAM >= 0) {
+            ramAId[simbolo.direccionRAM] = id;
+        }
+        if (simbolo.esConstante) {
+            memoriaVariables[id] = simbolo.valorConstante;
+            variablesConocidas[id] = true;
+        } else {
+            variablesConocidas[id] = false;
+        }
+    }
+
+    auto resolverValorPorCodigo = [&](int cod, const std::string& fallback) -> std::pair<bool, std::string> {
+        if (cod == OPERANDO_NULO) {
+            return {false, ""};
+        }
+        if (cod >= 0 && cod < BASE_TEMPORALES) {
+            auto itRam = ramAId.find(cod);
+            if (itRam != ramAId.end()) {
+                const std::string& idVar = itRam->second;
+                if (variablesConocidas[idVar]) {
+                    return {true, memoriaVariables[idVar]};
+                }
+            }
+            return {false, ""};
+        }
+        if (cod > BASE_TEMPORALES && cod < BASE_CONSTANTES) {
+            std::string tempKey = "$T" + std::to_string(cod - BASE_TEMPORALES);
+            auto itTemp = memoriaTemporales.find(tempKey);
+            if (itTemp != memoriaTemporales.end()) {
+                return {true, itTemp->second};
+            }
+            return {false, ""};
+        }
+        if (cod > BASE_CONSTANTES) {
+            auto itLit = estado.tablaLiterales.find(cod);
+            if (itLit != estado.tablaLiterales.end()) {
+                return {true, itLit->second};
+            }
+        }
+        if (fallback == "true" || fallback == "false") {
+            return {true, fallback};
+        }
+        try {
+            std::stod(fallback);
+            return {true, fallback};
+        } catch (...) {
+            if ((fallback.size() >= 2 && fallback.front() == '"' && fallback.back() == '"') ||
+                (fallback.size() >= 2 && fallback.front() == '\'' && fallback.back() == '\'')) {
+                return {true, fallback};
+            }
+        }
+        return {false, ""};
+    };
+
+    const int totalCuadruplos = static_cast<int>(estado.cuadruplos.size());
+    int pc = 1;
+    int pasos = 0;
+    const int maxPasos = 50000;
+
+    while (pc >= 1 && pc <= totalCuadruplos && pasos++ < maxPasos) {
+        const auto& c = estado.cuadruplos[pc - 1];
+        const int opNum = c.coperNum;
+
+        if (opNum == OP_NUM_ASIG || c.coper == "=") {
+            auto [conocido, val] = resolverValorPorCodigo(c.op1Num, c.op1);
+            std::string destino;
+            if (c.resNum >= 0 && c.resNum < BASE_TEMPORALES && ramAId.count(c.resNum)) {
+                destino = ramAId[c.resNum];
+            } else {
+                destino = !c.resRaw.empty() ? c.resRaw : c.res;
+            }
+
+            if (conocido) {
+                memoriaVariables[destino] = val;
+                variablesConocidas[destino] = true;
+            } else {
+                memoriaVariables.erase(destino);
+                variablesConocidas[destino] = false;
+            }
+            pc++;
+        }
+        else if (opNum == OP_NUM_GOTOFALSO || c.coper == "gotofalso") {
+            auto [conocido, cond] = resolverValorPorCodigo(c.op1Num, c.op1);
+            int destino = pc + 1;
+            if (c.resNum > 0) {
+                destino = c.resNum;
+            } else {
+                try { destino = std::stoi(c.res); } catch (...) { destino = pc + 1; }
+            }
+
+            if (conocido && (cond == "false" || cond == "0")) {
+                pc = destino;
+            } else {
+                pc++;
+            }
+        }
+        else if (opNum == OP_NUM_GOTO || c.coper == "goto") {
+            int destino = pc + 1;
+            if (c.resNum > 0) {
+                destino = c.resNum;
+            } else {
+                try { destino = std::stoi(c.res); } catch (...) { destino = pc + 1; }
+            }
+            pc = destino;
+        }
+        else if (opNum == OP_NUM_INPUT || c.coper == "input") {
+            std::string destino;
+            if (c.resNum >= 0 && c.resNum < BASE_TEMPORALES && ramAId.count(c.resNum)) {
+                destino = ramAId[c.resNum];
+            } else {
+                destino = !c.resRaw.empty() ? c.resRaw : c.res;
+            }
+            variablesConocidas[destino] = false;
+            memoriaVariables.erase(destino);
+            pc++;
+        }
+        else if (opNum == OP_NUM_OUTPUT || c.coper == "output") {
+            pc++;
+        }
+        else if (opNum == OP_NUM_NOT || opNum == OP_NUM_NEG || c.coper == "!" || c.coper == "NEG") {
+            auto [conocido, val] = resolverValorPorCodigo(c.op1Num, c.op1);
+            std::string temporal = !c.resRaw.empty() ? c.resRaw : c.res;
+            if (c.resNum > BASE_TEMPORALES && c.resNum < BASE_CONSTANTES) {
+                temporal = "$T" + std::to_string(c.resNum - BASE_TEMPORALES);
+            }
+            if (conocido) {
+                if (opNum == OP_NUM_NOT || c.coper == "!") {
+                    memoriaTemporales[temporal] = (val == "true") ? "false" : "true";
+                } else {
+                    try {
+                        double num = std::stod(val);
+                        memoriaTemporales[temporal] = formatearNumero(-num, val.find('.') == std::string::npos);
+                    } catch (...) {
+                        memoriaTemporales.erase(temporal);
+                    }
+                }
+            } else {
+                memoriaTemporales.erase(temporal);
+            }
+            pc++;
+        }
+        else {
+            // Operación binaria
+            auto [c1, v1] = resolverValorPorCodigo(c.op1Num, c.op1);
+            auto [c2, v2] = resolverValorPorCodigo(c.op2Num, c.op2);
+            std::string temporal = !c.resRaw.empty() ? c.resRaw : c.res;
+            if (c.resNum > BASE_TEMPORALES && c.resNum < BASE_CONSTANTES) {
+                temporal = "$T" + std::to_string(c.resNum - BASE_TEMPORALES);
+            }
+            if (c1 && c2) {
+                std::string resVal = calcularValor(c.coper, v1, v2);
+                if (!resVal.empty()) {
+                    memoriaTemporales[temporal] = resVal;
+                } else {
+                    memoriaTemporales.erase(temporal);
+                }
+            } else {
+                memoriaTemporales.erase(temporal);
+            }
+            pc++;
+        }
+    }
+
+    // Sincronizar los valores finales con la tabla de símbolos
+    for (auto& [id, simbolo] : estado.tablaSimbolos) {
+        if (simbolo.esConstante) {
+            continue;
+        }
+        if (variablesConocidas[id]) {
+            simbolo.valorConocido = true;
+            simbolo.valorActual = memoriaVariables[id];
+            simbolo.inicializada = true;
+        } else {
+            simbolo.valorConocido = false;
+            simbolo.valorActual.clear();
+        }
+    }
+}
+
+} // namespace Interprete
 
 // ============================================================================
 // LIMPIEZA DEL ESTADO
@@ -1222,8 +1615,11 @@ void reiniciarEstado(EstadoSemantico& estado) {
     estado.idDestinoAsignacion.clear();
     estado.tipoDestinoAsignacion = TipoDato::ERROR_SEMANTICO;
     estado.siguienteDireccionRAM = 0;
-    estado.siguienteTemporal = 1;
+    estado.siguienteTemporal = 21;
     estado.CONT = 1;
+    estado.tablaLiterales.clear();
+    estado.literalAId.clear();
+    estado.siguienteLiteral = BASE_CONSTANTES + 1;
 
     while (!estado.PilaO.empty()) estado.PilaO.pop();
     while (!estado.PTipos.empty()) estado.PTipos.pop();
@@ -1231,6 +1627,9 @@ void reiniciarEstado(EstadoSemantico& estado) {
     while (!estado.PSaltos.empty()) estado.PSaltos.pop();
     while (!estado.temporalesDisponibles.empty()) {
         estado.temporalesDisponibles.pop();
+    }
+    for (int i = 20; i >= 1; --i) {
+        estado.temporalesDisponibles.push(BASE_TEMPORALES + i);
     }
 }
 

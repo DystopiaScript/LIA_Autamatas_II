@@ -40,6 +40,56 @@ enum class TipoDato {
     ERROR_SEMANTICO
 };
 
+// ============================================================================
+// CODIGOS NUMERICOS PARA PILAS Y CUADRUPLOS (Requerimiento académico)
+// ============================================================================
+
+// Codigos de Tipos de Datos (Serie 300)
+constexpr int TIPO_NUM_ENTERO    = 301;
+constexpr int TIPO_NUM_REAL      = 302;
+constexpr int TIPO_NUM_CARACTER  = 303;
+constexpr int TIPO_NUM_BOOLEANO  = 304;
+constexpr int TIPO_NUM_CADENA    = 305;
+constexpr int TIPO_NUM_ERROR     = -1;
+
+// Codigos de Operadores en POper y Cuadruplos (Gramemas y Serie 1000)
+constexpr int OP_NUM_SUMA        = 105; // +
+constexpr int OP_NUM_RESTA       = 106; // -
+constexpr int OP_NUM_MULT        = 107; // *
+constexpr int OP_NUM_DIV         = 108; // /
+constexpr int OP_NUM_ASIG        = 109; // =
+constexpr int OP_NUM_IGUAL       = 110; // ==
+constexpr int OP_NUM_MENOR       = 111; // <
+constexpr int OP_NUM_MENORIGUAL  = 112; // <=
+constexpr int OP_NUM_MAYOR       = 113; // >
+constexpr int OP_NUM_MAYORIGUAL  = 114; // >=
+constexpr int OP_NUM_DIFERENTE   = 115; // !=
+constexpr int OP_NUM_NOT         = 116; // !
+constexpr int OP_NUM_AND         = 117; // &&
+constexpr int OP_NUM_OR          = 118; // ||
+constexpr int OP_NUM_PAREN_ABRE  = 119; // (
+constexpr int OP_NUM_MODULO      = 128; // %
+constexpr int OP_NUM_NEG         = 1001; // Menos unario (-)
+constexpr int OP_NUM_GOTOFALSO   = 1002; // Salto condicional gotofalso
+constexpr int OP_NUM_GOTO        = 1003; // Salto incondicional goto
+constexpr int OP_NUM_INPUT       = 1004; // Entrada de datos
+constexpr int OP_NUM_OUTPUT      = 1005; // Salida de datos
+
+// Series de direccionamiento para PilaO
+constexpr int BASE_TEMPORALES    = 2000; // $T1 = 2001, $T2 = 2002...
+constexpr int BASE_CONSTANTES    = 3000; // Literales = 3001, 3002...
+constexpr int OPERANDO_NULO      = -1;   // Operando vacio (_)
+
+int operadorACodigo(const std::string& op);
+std::string codigoAOperador(int cod);
+
+int tipoACodigo(TipoDato tipo);
+TipoDato codigoATipo(int cod);
+
+struct EstadoSemantico;
+int registrarLiteral(EstadoSemantico& estado, const std::string& valor, TipoDato tipo);
+std::string resolverOperandoVisual(const EstadoSemantico& estado, int opNum);
+
 struct MetadataArreglo {
     bool esArreglo = false;
     std::size_t cantidadElementos = 0;
@@ -66,20 +116,40 @@ struct Simbolo {
 };
 
 struct Cuadruplo {
+    // Campos numericos exigidos para las pilas y cuadruplos
+    int coperNum = 0;
+    int op1Num = OPERANDO_NULO;
+    int op2Num = OPERANDO_NULO;
+    int resNum = OPERANDO_NULO;
+
+    // Campos visuales legibles para SemanticWindow
     std::string coper;
     std::string op1;
     std::string op2;
     std::string res;
+
+    // Operandos con sus referencias internas preservadas (@VRAM[n], $Tn, o literales)
+    // para que el intérprete distinga una dirección RAM de un número literal.
+    std::string op1Raw;
+    std::string op2Raw;
+    std::string resRaw;
 };
 
 struct HistorialPilas {
     int paso = 0;
     std::string accion;
+    // Registros numericos de las pilas
+    std::vector<int> operandosNum;
+    std::vector<int> tiposNum;
+    std::vector<int> operadoresNum;
+    std::vector<int> availNum;
+    std::vector<int> saltos;
+
+    // Cadenas formateadas numericamente para la interfaz visual
     std::vector<std::string> operandos;
     std::vector<std::string> tipos;
     std::vector<std::string> operadores;
     std::vector<std::string> avail;
-    std::vector<int> saltos;
 };
 
 struct EstadoSemantico {
@@ -89,19 +159,24 @@ struct EstadoSemantico {
     std::map<std::string, Simbolo> tablaSimbolos;
 
     // ---------------------------------------------------------------------
-    // Pilas de trabajo definidas por la metodología del material
+    // Pilas de trabajo numericas (Requerimiento de la materia)
     // ---------------------------------------------------------------------
-    std::stack<std::string> PilaO;
-    std::stack<TipoDato> PTipos;
-    std::stack<std::string> POper;
-    std::stack<int> PSaltos;
+    std::stack<int> PilaO;   // Direcciones RAM (0..), Temporales (2001..), Literales (3001..)
+    std::stack<int> PTipos;  // Codigos de tipo (301..305)
+    std::stack<int> POper;   // Codigos de operadores (105..128, 1001..1005)
+    std::stack<int> PSaltos; // Indices de cuadruplos para backpatching
 
     // ---------------------------------------------------------------------
     // Generación de código intermedio
     // ---------------------------------------------------------------------
-    // AVAIL: temporales disponibles para reutilización.
-    std::stack<std::string> temporalesDisponibles;
+    // AVAIL: temporales disponibles para reutilización (codigos numericos 2001, 2002...)
+    std::stack<int> temporalesDisponibles;
     int siguienteTemporal = 1;
+
+    // Tabla de constantes literales reconocidas (mapea id 3001.. a texto literal)
+    std::map<int, std::string> tablaLiterales;
+    std::map<std::string, int> literalAId;
+    int siguienteLiteral = BASE_CONSTANTES + 1;
 
     // CONT: dirección del siguiente cuádruplo. El material inicia en 1.
     int CONT = 1;
@@ -466,6 +541,20 @@ void completarSalto(
 );
 
 } // namespace ControlFlujo
+
+/**
+ * Módulo de INTERPRETACIÓN / EVALUACIÓN DE CUÁDRUPLOS.
+ *
+ * Simula la ejecución secuencial y con saltos (gotofalso, goto) de los
+ * cuádruplos generados, actualizando la memoria de variables de forma
+ * que la tabla de símbolos refleje el valor final de la rama efectivamente
+ * ejecutada.
+ */
+namespace Interprete {
+
+void ejecutarCuadruplos(EstadoSemantico& estado);
+
+} // namespace Interprete
 
 /**
  * Limpia el estado completo antes de iniciar otro análisis.

@@ -32,6 +32,19 @@ bool contiene(
 // La pila se copia por valor porque para imprimirla hay que hacer pop de sus
 // elementos. El resultado se reconstruye de base a tope, que es el orden
 // didáctico utilizado por la interfaz.
+std::string pilaTexto(std::stack<int> pila) {
+    std::vector<int> valores;
+    while (!pila.empty()) {
+        valores.push_back(pila.top());
+        pila.pop();
+    }
+    std::ostringstream salida;
+    for (auto it = valores.rbegin(); it != valores.rend(); ++it) {
+        salida << *it << ' ';
+    }
+    return salida.str();
+}
+
 std::string pilaTexto(std::stack<std::string> pila) {
     std::vector<std::string> valores;
     while (!pila.empty()) {
@@ -45,7 +58,20 @@ std::string pilaTexto(std::stack<std::string> pila) {
     return salida.str();
 }
 
-// Igual que pilaTexto(), pero convierte cada TipoDato a su nombre textual.
+// Igual que pilaTexto(), pero convierte cada TipoDato/código a su nombre textual.
+std::string tiposTexto(std::stack<int> pila) {
+    std::vector<int> valores;
+    while (!pila.empty()) {
+        valores.push_back(pila.top());
+        pila.pop();
+    }
+    std::ostringstream salida;
+    for (auto it = valores.rbegin(); it != valores.rend(); ++it) {
+        salida << Semantica::tipoToString(Semantica::codigoATipo(*it)) << ' ';
+    }
+    return salida.str();
+}
+
 std::string tiposTexto(std::stack<TipoDato> pila) {
     std::vector<TipoDato> valores;
     while (!pila.empty()) {
@@ -327,11 +353,11 @@ std::size_t SemanticAnalysis::procesarExpresion(
                 // tienen mayor o igual precedencia. Esto implementa la
                 // precedencia usual de *, +, relacionales y lógicos.
                 while (!estado.POper.empty() &&
-                       estado.POper.top() != "(" &&
+                       estado.POper.top() != Semantica::OP_NUM_PAREN_ABRE &&
                        Semantica::GeneracionCodigo::precedencia(
-                           estado.POper.top()
+                           Semantica::codigoAOperador(estado.POper.top())
                        ) >= Semantica::GeneracionCodigo::precedencia(op)) {
-                    const std::string anterior = estado.POper.top();
+                    const std::string anterior = Semantica::codigoAOperador(estado.POper.top());
                     estado.POper.pop();
 
                     // Los operadores unarios consumen un solo operando;

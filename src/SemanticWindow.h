@@ -10,8 +10,9 @@
  * sus metodos solamente convierten el EstadoSemantico en controles Qt:
  *
  * - tabla de simbolos;
- * - pilas de trabajo;
+ * - constantes;
  * - cuadruplos;
+ * - pilas de trabajo (cinco columnas verticales con historial completo);
  * - errores semanticos.
  */
 
@@ -22,6 +23,7 @@ class QTabWidget;
 class QTextEdit;
 class QTableWidget;
 class QWidget;
+class QCheckBox;
 
 struct SemanticAnalysisResult;
 
@@ -34,12 +36,12 @@ public:
         QWidget* parent = nullptr
     );
 
+private slots:
+    void onToggleModoNumerico(bool checked);
+
 private:
-    // Panel de texto usado para informacion lineal, como el contenido final
-    // de las pilas o la lista de errores.
     QTextEdit* crearPanel(const QString& texto);
 
-    // Tablas estructuradas para datos que se entienden mejor por columnas.
     QTableWidget* crearTablaSimbolos(
         const SemanticAnalysisResult& resultado
     );
@@ -53,6 +55,11 @@ private:
         const SemanticAnalysisResult& resultado
     );
 
+    void reconstruirColumnasPilas(bool modoNumerico);
+
+    const SemanticAnalysisResult& m_resultado;
+    QWidget* m_contenedorColumnasPilas = nullptr;
+    QCheckBox* m_chkModoNumerico = nullptr;
 };
 
 #endif // SEMANTIC_WINDOW_H

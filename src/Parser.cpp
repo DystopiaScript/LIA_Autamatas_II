@@ -372,6 +372,15 @@ bool Parser::Analiza() {
     // programa quedan tokens, el tope será $ y el token actual será otro,
     // cayendo de forma natural en el CASO 3 (error de terminal).
 
+    if (sintaxisCorrecta && semanticaCorrecta) {
+        try {
+            Semantica::Interprete::ejecutarCuadruplos(estadoSemantico);
+        } catch (const std::exception& error) {
+            // La evaluacion de cuádruplos es una fase de resolución semántica
+            // para reflejar los valores de la rama ejecutada.
+        }
+    }
+
     return sintaxisCorrecta;
 }
 
@@ -789,12 +798,13 @@ void Parser::reducirOperadoresConPrecedenciaMinima(
     using namespace Semantica;
 
     while (!estadoSemantico.POper.empty() &&
-           estadoSemantico.POper.top() != "(" &&
+           estadoSemantico.POper.top() != OP_NUM_PAREN_ABRE &&
            GeneracionCodigo::precedencia(
-               estadoSemantico.POper.top()
+               codigoAOperador(estadoSemantico.POper.top())
            ) >= precedenciaMinima) {
-        const std::string operador = estadoSemantico.POper.top();
+        const int codOp = estadoSemantico.POper.top();
         estadoSemantico.POper.pop();
+        const std::string operador = codigoAOperador(codOp);
 
         if (operador == "!" || operador == "NEG") {
             GeneracionCodigo::reducirOperacionUnaria(
