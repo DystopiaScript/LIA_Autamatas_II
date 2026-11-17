@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+#include <iostream>
 
 namespace Semantica {
 
@@ -1360,6 +1361,211 @@ void finalizarIf(EstadoSemantico& estado) {
         " -> " + std::to_string(estado.CONT)
     );
 }
+
+void iniciarWhile(EstadoSemantico& estado){
+    if (estado.PilaO.empty() || estado.PTipos.empty()) {
+        throw std::logic_error(
+            "[SALTOS] Falta la condicion del WHILE"
+        );
+    }
+
+    const TipoDato tipoCondicion = codigoATipo(estado.PTipos.top());
+    if (tipoCondicion != TipoDato::BOOLEANO) {
+        throw std::logic_error(
+            "[SEMANTICA] La condicion del WHILE debe ser de tipo BOOLEANO"
+        );
+    }
+
+    estado.PTipos.pop();
+    const int condCod = estado.PilaO.top();
+    estado.PilaO.pop();
+    const std::string condicion = numeroAOperandoRaw(condCod, estado);
+    const int salto = generarSalto(estado, "gotofalso", condicion);
+    GeneracionCodigo::liberarTemporalAvail(estado, condicion);
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "WHILE: gotofalso " + condicion +
+        " pendiente en " + std::to_string(salto)
+    );
+}
+
+void finalizarWhile(EstadoSemantico& estado){
+    int indice = estado.PSaltos.top();
+    int aux = -1;
+
+    if (estado.cuadruplos.at(indice-1).coper == "gotobreak")
+    {
+        aux = indice;
+        estado.PSaltos.pop();
+        indice = estado.PSaltos.top();
+    }
+    
+
+    const int salto = generarSalto(estado, "goto", "_");
+
+    completarSalto(estado, salto, indice);
+
+    estado.PSaltos.pop();
+
+    completarSalto(estado, indice, estado.CONT);
+
+    estado.PSaltos.pop();
+
+    if (aux != -1)
+    {
+        estado.PSaltos.push(aux);
+    }
+    
+
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "WHILE: salto " + std::to_string(salto) +
+        " -> " + std::to_string(estado.CONT)
+    );
+
+}
+
+void iniciarDoWhile(EstadoSemantico& estado){
+    int indice = estado.CONT;
+
+    estado.PSaltos.push(indice);
+
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "Do-While: guardar " + std::to_string(indice)
+    );
+}
+
+void finalizarDoWhile(EstadoSemantico& estado){
+    if (estado.PilaO.empty() || estado.PTipos.empty()) {
+        throw std::logic_error(
+            "[SALTOS] Falta la condicion del DO-WHILE"
+        );
+    }
+
+    const TipoDato tipoCondicion = codigoATipo(estado.PTipos.top());
+    if (tipoCondicion != TipoDato::BOOLEANO) {
+        throw std::logic_error(
+            "[SEMANTICA] La condicion del DO-WHILE debe ser de tipo BOOLEANO"
+        );
+    }
+
+    estado.PTipos.pop();
+    const int condCod = estado.PilaO.top();
+    estado.PilaO.pop();
+    const std::string condicion = numeroAOperandoRaw(condCod, estado);
+    const int salto = generarSalto(estado, "gotoverdadero", condicion);
+    estado.PSaltos.pop();
+    GeneracionCodigo::liberarTemporalAvail(estado, condicion);
+
+    int indice = estado.PSaltos.top();
+    int aux = -1;
+    if (estado.cuadruplos.at(indice-1).coper == "gotobreak")
+    {
+        aux = indice;
+        estado.PSaltos.pop();
+        indice = estado.PSaltos.top();
+    }
+    estado.PSaltos.pop();
+    completarSalto(estado, salto,indice);
+
+    if (aux != -1)
+    {
+        estado.PSaltos.push(aux);
+    }
+    
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "Do-While: gotoverdadero " + condicion +
+        "->" + std::to_string(salto)
+    );
+
+}
+
+void iniciarLoop(EstadoSemantico& estado){
+    const int indice = estado.CONT;
+    estado.PSaltos.push(indice);
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "Loop: guardar " + std::to_string(indice)
+    );
+}
+
+void finalizarLoop(EstadoSemantico& estado){
+    int indice = estado.PSaltos.top();
+    int aux = -1;
+    if (estado.cuadruplos.at(indice-1).coper == "gotobreak")
+    {
+        aux = indice;
+        estado.PSaltos.pop();
+        indice = estado.PSaltos.top();
+    }
+     const int salto = generarSalto(
+        estado,
+        "goto",
+        "_"
+    );
+    
+    estado.PSaltos.pop();
+    estado.PSaltos.pop();
+
+    completarSalto(estado,salto,indice);
+
+    if (aux != -1)
+    {
+        estado.PSaltos.push(aux);
+    }
+    
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "Loop: goto -> " + std::to_string(indice) 
+    );
+}
+
+int colocarBreak(EstadoSemantico& estado){
+    const int indice = generarSalto(
+        estado,
+        "gotobreak",
+        "_"
+    );
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "Break: gotobreak pendiente en " + std::to_string(indice)
+    );
+    return indice;
+}
+
+void completarBreak(EstadoSemantico& estado){
+    if (estado.PSaltos.empty())
+    {
+        return;
+    }
+
+    //const int aux = estado.PSaltos.top();
+    //estado.PSaltos.pop();
+    
+
+    const int indice = estado.PSaltos.top();
+    
+
+    if (estado.cuadruplos.at(indice-1).coper == "gotobreak")
+    {
+        completarSalto(estado, indice, estado.CONT);
+        estado.PSaltos.pop();
+        //estado.PSaltos.push(aux);
+    }else{
+        //estado.PSaltos.push(aux);
+    }
+
+    GeneracionCodigo::registrarEstadoPilas(
+        estado,
+        "Break: gotobreak -> " + std::to_string(estado.CONT) 
+    );
+    
+
+}
+
+
 
 int generarSalto(
     EstadoSemantico& estado,

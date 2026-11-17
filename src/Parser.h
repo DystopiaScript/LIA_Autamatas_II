@@ -165,11 +165,19 @@ private:
     bool entradaPorIdentificadorActiva;    // input(id, id, ...) segun gramatica
     bool condicionIfPendiente;             // Se espera cerrar la condicion de if
     bool elseIfPendiente;                  // Se espera cerrar el bloque ELSE
+    bool condicionWhilePendiente;          // Se espera cerrar la condicion del while
+    bool whilePendiente;                   // Se espera cerrar el estatuto while
+    bool doWhilePendiente;                 // Se espera cerrar el estatuto do-while
+    bool condicionDoWhilePendiente;        // Se espera cerrar la condicion del do-While
+    bool loopPendiente;                    // se espera cerrar el estatuto loop
     int parentesisDeExpresionAbiertos;     // Control de FACT -> ( EXPR )
     std::string idConstantePendiente;
     Semantica::TipoDato tipoConstantePendiente =
         Semantica::TipoDato::ERROR_SEMANTICO;
     std::string valorConstantePendiente;
+    std::vector<int> saltosWhile;
+    std::vector<int> saltosDoWhile;
+    std::vector<int> saltosLoop;
 
     // ========== MATRIZ PREDICTIVA M[X, a] ==========
     /**
@@ -287,6 +295,7 @@ private:
      *  - gramema 101 (identificador) y demás -> el gramema tal cual
      */
     int codigoDelToken(const Token& t) const;
+    
 
     /**
      * @brief Traduce un código de terminal a su columna en la matriz predictiva

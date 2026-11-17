@@ -1,11 +1,11 @@
 @echo off
-set PATH=C:\Qt\6.11.1\mingw_64\bin;C:\Users\jashe\Downloads\w64devkit\bin;%PATH%
+set PATH=C:\Qt\6.12.0\mingw_64\bin;C:\Users\pc\documents\w64devkit\bin;%PATH%
 
 echo Limpiando build anterior...
 if exist build rmdir /s /q build
 
 echo Generando archivos de compilacion...
-cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_PREFIX_PATH=C:/Qt/6.11.1/mingw_64
+cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_PREFIX_PATH=C:/Qt/6.12.0/mingw_64
 
 echo Compilando desde cero...
 cmake --build build

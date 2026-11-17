@@ -74,6 +74,8 @@ constexpr int OP_NUM_GOTOFALSO   = 1002; // Salto condicional gotofalso
 constexpr int OP_NUM_GOTO        = 1003; // Salto incondicional goto
 constexpr int OP_NUM_INPUT       = 1004; // Entrada de datos
 constexpr int OP_NUM_OUTPUT      = 1005; // Salida de datos
+constexpr int OP_NUM_GOTOBREAK   = 1006; // Salto goto para break
+constexpr int OP_NUM_GOTOVERDAD  = 1007; // salto condicional gotoverdadero
 
 // Series de direccionamiento para PilaO
 constexpr int BASE_TEMPORALES    = 2000; // $T1 = 2001, $T2 = 2002...
@@ -526,6 +528,50 @@ void iniciarElse(EstadoSemantico& estado);
  */
 void finalizarIf(EstadoSemantico& estado);
 
+/**
+ * Valida que la condición de POper y PTipos es booleana
+ * y genera el gotofalso pendiente
+ */
+void iniciarWhile(EstadoSemantico& estado);
+
+/**
+ * Crea un goto que se devuelve al gotofalso pendiente
+ * y rellena el gotofalso pendiente
+ */
+void finalizarWhile(EstadoSemantico& estado);
+
+/**
+ * Guarda CONT en PSaltos
+ */
+void iniciarDoWhile(EstadoSemantico& estado);
+
+/**
+ * Valida que la condición de POper y PTipos es booleana
+ * y genera un gotoverdadero hacia el valor guardado en PSaltos
+ */
+void finalizarDoWhile(EstadoSemantico& estado);
+
+/**
+ * Guarda CONT en PSaltos
+ */
+void iniciarLoop(EstadoSemantico& estado);
+
+/**
+ * Genera un goto hacia el valor almacenadao en PSaltos
+ */
+void finalizarLoop(EstadoSemantico& estado);
+
+/**
+ * Genera un gotobreak pendiente
+ */
+int colocarBreak(EstadoSemantico& estado);
+
+/**
+ * Busca el último elemento de PSaltos en búsqueda de un gotobreak pendiente
+ * En caso de serlo, rellena el gotobreakpendiente
+ */
+void completarBreak(EstadoSemantico& estado);
+
 /** Genera un salto pendiente y lo registra en PSaltos. */
 int generarSalto(
     EstadoSemantico& estado,
@@ -541,6 +587,7 @@ void completarSalto(
 );
 
 } // namespace ControlFlujo
+
 
 /**
  * Módulo de INTERPRETACIÓN / EVALUACIÓN DE CUÁDRUPLOS.
