@@ -199,6 +199,10 @@ Parser::Parser()
       entradaPorIdentificadorActiva(false),
       condicionIfPendiente(false),
       elseIfPendiente(false),
+      whilePendiente(false),
+      condicionWhilePendiente(false),
+      doWhilePendiente(false),
+      condicionDoWhilePendiente(false),
       parentesisDeExpresionAbiertos(0) {
     // Constructor por defecto
 }
@@ -404,6 +408,10 @@ void Parser::reset() {
     entradaPorIdentificadorActiva = false;
     condicionIfPendiente = false;
     elseIfPendiente = false;
+    whilePendiente = false;
+    condicionWhilePendiente = false;
+    doWhilePendiente = false;
+    condicionDoWhilePendiente = false;
     parentesisDeExpresionAbiertos = 0;
     idConstantePendiente.clear();
     tipoConstantePendiente = Semantica::TipoDato::ERROR_SEMANTICO;
@@ -506,6 +514,33 @@ void Parser::ejecutarAccionDeProduccion(int numeroProduccion) {
             // Este punto cierra tanto IF-THEN como IF-THEN-ELSE: si no hubo
             // ELSE queda el gotofalso; si hubo ELSE queda el goto final.
             Semantica::ControlFlujo::finalizarIf(estadoSemantico);
+            break;
+        
+        case 24: // EST_WHILE -> while ( EXPR ) { ESTATUTOS } 
+            //Espera a que ( EXPR ) se reducida para realizar la accion
+            
+            condicionWhilePendiente = true;
+
+            break;
+        
+        case 25: // EST_DO -> do ESTATUTOS dowhile ( EXPR ) ; 
+            //Ejecuta la primera accion guardando el salto 
+            //y poniendose a la espera del siguiente terminal 'dowhile'
+            Semantica::ControlFlujo::iniciarDoWhile(estadoSemantico);
+            saltosDoWhile.push_back(estadoSemantico.PSaltos.top());
+            doWhilePendiente = true;
+            break;
+
+        case 26: // EST_LOOP -> loop { ESTATUTOS }
+            //Guarda el salto y se pone a la espera de '}'
+            Semantica::ControlFlujo::iniciarLoop(estadoSemantico);
+            saltosLoop.push_back(estadoSemantico.PSaltos.top());
+            loopPendiente = true;
+            break;
+
+        case 27: // EST_BREAK -> break ;  
+            //Ejecuta la acción colocando el gotobreak
+            Semantica::ControlFlujo::colocarBreak(estadoSemantico);
             break;
 
         case 28: // output ( EXPR LEXPR ) ;
@@ -752,6 +787,75 @@ void Parser::ejecutarAccionDeMatch(int terminalEsperado) {
         Semantica::ControlFlujo::finalizarIf(estadoSemantico);
         elseIfPendiente = false;
     }
+
+    //En 'while ( EXPR )', EXPR ya fue reducida antes de hacer match con {
+    //Equivale a la primera acción
+    if (condicionWhilePendiente &&
+        terminalEsperado == LLAVE_ABRE
+        ){
+        Semantica::ControlFlujo::iniciarWhile(estadoSemantico);
+        saltosWhile.push_back(estadoSemantico.PSaltos.top());
+        condicionWhilePendiente = false;
+        whilePendiente = true;
+    }
+
+    //Cierre de { ESTATUTOS }
+    //Rellena los gotofalso y gotobreak pendientes 
+    //Queda pendiente si aún hay while's almacenados
+    if(whilePendiente &&
+        terminalEsperado == LLAVE_CIERRA){
+        Semantica::ControlFlujo::finalizarWhile(estadoSemantico);
+        Semantica::ControlFlujo::completarBreak(estadoSemantico);
+        saltosWhile.pop_back();
+        if (saltosWhile.empty())
+        {
+            whilePendiente = false;
+        }
+        
+    }
+
+    //Una vez que ya se completo do ESTATUTOS dowhile
+    //Se prepara para comenzar a reducir la condición
+    if (doWhilePendiente && 
+        terminalEsperado == PR_DOWHILE)
+    {
+        condicionDoWhilePendiente=true;
+        doWhilePendiente = false;
+    }
+
+    //Reduce la condicón y genera el gotoverdadero
+    //y completa los gotobreak pendientes
+    //Se queda pendiente si aún faltan do-while's por completar
+    if (!doWhilePendiente &&
+        condicionDoWhilePendiente &&
+        terminalEsperado == PUNTO_COMA)
+    {
+        Semantica::ControlFlujo::finalizarDoWhile(estadoSemantico);
+        Semantica::ControlFlujo::completarBreak(estadoSemantico);
+        saltosDoWhile.pop_back();
+        if (saltosDoWhile.empty())
+        {
+            condicionDoWhilePendiente = false;
+        }
+    }
+
+    //Genera el salto una vez recibal el terminal
+    //Rellena gotobreak's pendientes
+    //Se queda pendiente en caso de que hayan loop's pendientes
+    if (loopPendiente &&
+        terminalEsperado == LLAVE_CIERRA)
+    {
+        Semantica::ControlFlujo::finalizarLoop(estadoSemantico);
+        Semantica::ControlFlujo::completarBreak(estadoSemantico);
+        saltosLoop.pop_back();
+        
+        if (saltosLoop.empty())
+        {
+            loopPendiente = false;
+        }
+        
+    }
+    
 
     // '=' no entra en POper. Solo termina el contexto de una asignacion.
     // POper debe contener exclusivamente operadores de expresiones.
